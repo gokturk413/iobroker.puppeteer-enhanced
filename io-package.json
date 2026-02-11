@@ -1,0 +1,334 @@
+{
+  "common": {
+    "name": "puppeteer",
+    "version": "0.5.0",
+    "news": {
+      "0.5.0": {
+        "en": "Added PDF export functionality\nAdded automatic ioBroker web login detection and authentication\nAdded login credentials support",
+        "de": "PDF-Exportfunktion hinzugefügt\nAutomatische Erkennung und Authentifizierung für ioBroker-Webanmeldung hinzugefügt\nUnterstützung für Anmeldeinformationen hinzugefügt",
+        "ru": "Добавлена функция экспорта PDF\nДобавлено автоматическое обнаружение и аутентификация веб-входа ioBroker\nДобавлена поддержка учетных данных для входа",
+        "pt": "Funcionalidade de exportação de PDF adicionada\nDetecção automática de login web ioBroker e autenticação adicionadas\nSupporte de credenciais de login adicionado",
+        "nl": "PDF-exportfunctionaliteit toegevoegd\nAutomatische detectie en authenticatie van ioBroker-weblogin toegevoegd\nOndersteuning voor inloggegevens toegevoegd",
+        "fr": "Fonctionnalité d'exportation PDF ajoutée\nDétection automatique de connexion Web ioBroker et authentification ajoutées\nPrise en charge des informations de connexion ajoutée",
+        "it": "Aggiunta funzionalità di esportazione PDF\nRilevamento automatico e autenticazione accesso Web ioBroker aggiunti\nAggiunto supporto credenziali di accesso",
+        "es": "Funcionalidad de exportación de PDF añadida\nDetección automática de inicio de sesión web ioBroker y autenticación añadidas\nSoporte de credenciales de inicio de sesión añadido",
+        "pl": "Dodano funkcję eksportu PDF\nDodano automatyczne wykrywanie i uwierzytelnianie logowania do sieci ioBroker\nDodano obsługę danych logowania",
+        "uk": "Додано функцію експорту PDF\nДодано автоматичне виявлення та автентифікацію веб-входу ioBroker\nДодано підтримку облікових даних входу",
+        "zh-cn": "添加 PDF 导出功能\n添加 ioBroker Web 登录自动检测和身份验证\n添加登录凭据支持"
+      },
+      "0.4.0": {
+        "en": "updated puppeteer dependency\nallow to specify an external browser for puppeteer",
+        "de": "aktualisierte puppeteer abhängigkeit\neinen externen browser für puppenspieler angeben",
+        "ru": "обновленная зависимость марионеток\nразрешить указать внешний браузер для марионетки",
+        "pt": "dependência puppeteer atualizada\npermitir especificar um navegador externo para puppeteer",
+        "nl": "bijgewerkt puppeteer afhankelijkheid\nstaat toe om een externe browser voor puppeter op te geven",
+        "fr": "mise à jour de la dépendance des marionnettistes\npermettre de spécifier un navigateur externe pour marionnettiste",
+        "it": "dipendenza del burattino aggiornata\nconsentire di specificare un browser esterno per burattinaio",
+        "es": "dependencia actualizada del titiritero\npermite especificar un navegador externo para titiritero",
+        "pl": "zaktualizowana zależność lalkarza\npozwala na określenie zewnętrznej przeglądarki dla lalkarza",
+        "uk": "оновлена залежність цуценя\nдозволяє вказати зовнішній браузер для цуценя",
+        "zh-cn": "更新的傀儡依赖\n允许为傀儡指定外部浏览器"
+      },
+      "0.3.0": {
+        "en": "allowed to specify additional arguments for the puppeteer process\nupdated puppeteer dependency",
+        "de": "erlaubt, zusätzliche argumente für den puppenspieler-prozess anzugeben\naktualisierte puppeteer abhängigkeit",
+        "ru": "разрешено указывать дополнительные аргументы для марионеточного процесса\nобновленная зависимость марионеток",
+        "pt": "permitido especificar argumentos adicionais para o processo de puppeteer\ndependência puppeteer atualizada",
+        "nl": "mag aanvullende argumenten voor het puppeteerproces specificeren\nbijgewerkt puppeteer afhankelijkheid",
+        "fr": "permis de spécifier des arguments supplémentaires pour le processus marionnettiste\nmise à jour de la dépendance des marionnettistes",
+        "it": "permesso di specificare ulteriori argomenti per il processo di burattinaio\ndipendenza del burattino aggiornata",
+        "es": "permite especificar argumentos adicionales para el proceso del titiritero\ndependencia actualizada del titiritero",
+        "pl": "dozwolone określenie dodatkowych argumentów dla procesu lalkarza\nzaktualizowana zależność lalkarza",
+        "uk": "дозволило вказати додаткові аргументи для процесу цуценя\nоновлена залежність цуценя",
+        "zh-cn": "允许指定傀儡进程的其他参数\n更新的傀儡依赖"
+      },
+      "0.2.8": {
+        "en": "update puppeteer dependency",
+        "de": "aktualisierung puppeteer abhängigkeit",
+        "ru": "обновление марионеточной зависимости",
+        "pt": "update puppeteer dependência",
+        "nl": "puppeteerafhankelijkheid bijwerken",
+        "fr": "mettre à jour la dépendance des marionnettistes",
+        "it": "aggiornamento dipendenze del burattino",
+        "es": "actualización de la dependencia del titiritero",
+        "pl": "aktualizacja zależności lalkarz",
+        "uk": "оновлення залежності цуценя",
+        "zh-cn": "更新傀儡依赖"
+      },
+      "0.2.7": {
+        "en": "update puppeteer dependency",
+        "de": "aktualisierung puppeteer abhängigkeit",
+        "ru": "обновить зависимость puppeteer",
+        "pt": "update puppeteer dependência",
+        "nl": "vertaling:",
+        "fr": "mettre à jour la dépendance des marionnettistes",
+        "it": "aggiornamento dipendenze del burattino",
+        "es": "actualización de la dependencia del titiritero",
+        "pl": "aktualizacja marionetki",
+        "uk": "оновлення залежності цуценя",
+        "zh-cn": "二. 重新依赖"
+      },
+      "0.2.6": {
+        "en": "we now close the page also when screenshot taken via message",
+        "de": "wir schließen jetzt die seite auch, wenn screenshot über nachricht aufgenommen",
+        "ru": "мы теперь закрываем страницу также когда скриншот сделанный через сообщение",
+        "pt": "nós agora fechamos a página também quando a captura de tela tirada através da mensagem",
+        "nl": "we sluiten de pagina ook als de screenshot via de boodschap",
+        "fr": "nous fermons maintenant la page aussi quand capture d'écran prise via message",
+        "it": "ora chiudiamo la pagina anche quando screenshot preso tramite messaggio",
+        "es": "ahora cerramos la página también cuando capturamos la pantalla a través del mensaje",
+        "pl": "zbliża się również do ekranu, który został wykonany za pośrednictwem wiadomości",
+        "zh-cn": "我们现在关闭该页。"
+      },
+      "0.2.5": {
+        "en": "we have optimized the viewport option",
+        "de": "wir haben die option viewport optimiert",
+        "ru": "мы оптимизировали опцию viewport",
+        "pt": "nós temos otimizado a opção viewport",
+        "nl": "we hebben de uitzichtsoptie",
+        "fr": "nous avons optimisé l'option viewport",
+        "it": "abbiamo ottimizzato l'opzione viewport",
+        "es": "hemos optimizado la opción viewport",
+        "pl": "zoptymalizowano opcję teleportu",
+        "zh-cn": "我们最佳地利用了看法。"
+      },
+      "0.2.4": {
+        "en": "allow settings viewport options\nthe default viewport is now the max resolution",
+        "de": "optionen für einstellungen anzeigen\nder standard-viewport ist jetzt die maximale auflösung",
+        "ru": "разрешить настройки viewport варианты\nviewport по умолчанию теперь максимальное разрешение",
+        "pt": "permitir opções de visualização de configurações\no viewport padrão é agora a resolução máxima",
+        "nl": "vertaling:\nhet betreffende uitzicht is nu de maximale oplossing",
+        "fr": "les options de visualisation des paramètres\nle viewport par défaut est maintenant la résolution max",
+        "it": "consentire impostazioni viewport opzioni\nla vista predefinita è ora la risoluzione massima",
+        "es": "permite opciones de configuración viewport\nel puerto de vista predeterminado es ahora la resolución máxima",
+        "pl": "pozwalać na użycie opcji widokowej\ndomyślny portal to obecnie maxową rozdzielczość",
+        "zh-cn": "允许环境选择\n现在,拖欠国是最高决议。"
+      }
+    },
+    "title": "Puppeteer",
+    "titleLang": {
+      "en": "Puppeteer",
+      "de": "Puppenspieler",
+      "ru": "Кукольник",
+      "pt": "Marionetista",
+      "nl": "poppenspeler",
+      "fr": "Marionnettiste",
+      "it": "Burattinaio",
+      "es": "Titiritero",
+      "pl": "Lalkarz",
+      "zh-cn": "傀儡师"
+    },
+    "desc": {
+      "en": "Headless browser to generate screenshots and PDF exports based on Chrome",
+      "de": "Headless-Browser zum Generieren von Screenshots und PDF-Exporten auf Basis von Chrome",
+      "ru": "Безголовый браузер для создания скриншотов и экспорта PDF на основе Chrome",
+      "pt": "Navegador sem cabeça para gerar capturas de tela e exportações de PDF com base no Chrome",
+      "nl": "Headless browser om screenshots en PDF-exports te genereren op basis van Chrome",
+      "fr": "Navigateur sans tête pour générer des captures d'écran et des exports PDF basés sur Chrome",
+      "it": "Browser headless per generare screenshot ed esportazioni PDF basati su Chrome",
+      "es": "Navegador sin cabeza para generar capturas de pantalla y exportaciones PDF basado en Chrome",
+      "pl": "Bezgłowa przeglądarka do generowania zrzutów ekranu i eksportów PDF w oparciu o Chrome",
+      "zh-cn": "基于 Chrome 生成截图和 PDF 导出的无头浏览器"
+    },
+    "authors": [
+      "gokturk413 <gokturk413@gmail.com>"
+    ],
+    "keywords": [
+      "screenshots",
+      "visualization",
+      "browser",
+      "pdf",
+      "export",
+      "login"
+    ],
+    "platform": "Javascript/Node.js",
+    "icon": "puppeteer.png",
+    "enabled": true,
+    "extIcon": "https://raw.githubusercontent.com/foxriver76/ioBroker.puppeteer/main/admin/puppeteer.png",
+    "readme": "https://github.com/foxriver76/ioBroker.puppeteer/blob/main/README.md",
+    "loglevel": "info",
+    "mode": "daemon",
+    "adminUI": {
+      "config": "json"
+    },
+    "type": "utility",
+    "messagebox": true,
+    "compact": true,
+    "connectionType": "local",
+    "dataSource": "poll",
+    "dependencies": [
+      {
+        "js-controller": ">=5.0.19"
+      }
+    ],
+    "osDependencies": {
+      "linux": [
+        "ca-certificates",
+        "fonts-liberation",
+        "libappindicator3-1",
+        "libasound2",
+        "libatk-bridge2.0-0",
+        "libatk1.0-0",
+        "libc6",
+        "libcairo2",
+        "libcups2",
+        "libdbus-1-3",
+        "libexpat1",
+        "libfontconfig1",
+        "libgbm1",
+        "libgcc1",
+        "libglib2.0-0",
+        "libgtk-3-0",
+        "libnspr4",
+        "libnss3",
+        "libpango-1.0-0",
+        "libpangocairo-1.0-0",
+        "libstdc++6",
+        "libx11-6",
+        "libx11-xcb1",
+        "libxcb1",
+        "libxcomposite1",
+        "libxcursor1",
+        "libxdamage1",
+        "libxext6",
+        "libxfixes3",
+        "libxi6",
+        "libxrandr2",
+        "libxrender1",
+        "libxss1",
+        "libxtst6",
+        "lsb-release",
+        "wget",
+        "xdg-utils"
+      ]
+    },
+    "tier": 2,
+    "licenseInformation": {
+      "type": "free",
+      "license": "MIT"
+    },
+    "installedFrom": "iobroker.puppeteer@0.5.0"
+  },
+  "native": {
+    "additionalArgs": [],
+    "useExternalBrowser": false,
+    "executablePath": "",
+    "webUsername": "",
+    "webPassword": ""
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "url",
+      "type": "state",
+      "common": {
+        "name": "URL of which screenshot is made",
+        "type": "string",
+        "read": false,
+        "write": true,
+        "role": "text.url"
+      },
+      "native": {}
+    },
+    {
+      "_id": "filename",
+      "type": "state",
+      "common": {
+        "name": "Name of the saved file",
+        "type": "string",
+        "read": true,
+        "write": true,
+        "role": "text"
+      },
+      "native": {}
+    },
+    {
+      "_id": "fullPage",
+      "type": "state",
+      "common": {
+        "name": "If true, takes a screenshot of the full page.",
+        "type": "boolean",
+        "read": true,
+        "write": true,
+        "role": "switch",
+        "def": false
+      },
+      "native": {}
+    },
+    {
+      "_id": "clipTop",
+      "type": "state",
+      "common": {
+        "name": "Top position of the clip rectangle. Default value 0px",
+        "type": "number",
+        "read": true,
+        "write": true,
+        "role": "value",
+        "def": 0
+      },
+      "native": {}
+    },
+    {
+      "_id": "clipLeft",
+      "type": "state",
+      "common": {
+        "name": "Left position of the clip rectangle. Default value 0px",
+        "type": "number",
+        "read": true,
+        "write": true,
+        "role": "value",
+        "def": 0
+      },
+      "native": {}
+    },
+    {
+      "_id": "clipWidth",
+      "type": "state",
+      "common": {
+        "name": "Width of the clip rectangle.",
+        "type": "number",
+        "read": true,
+        "write": true,
+        "role": "value"
+      },
+      "native": {}
+    },
+    {
+      "_id": "clipHeight",
+      "type": "state",
+      "common": {
+        "name": "Height of the clip rectangle.",
+        "type": "number",
+        "read": true,
+        "write": true,
+        "role": "value"
+      },
+      "native": {}
+    },
+    {
+      "_id": "renderTime",
+      "type": "state",
+      "common": {
+        "name": "Interval in ms to wait till the page will be rendered",
+        "type": "number",
+        "read": true,
+        "write": true,
+        "role": "value.interval",
+        "unit": "ms"
+      },
+      "native": {}
+    },
+    {
+      "_id": "waitForSelector",
+      "type": "state",
+      "common": {
+        "name": "Selector to wait for before taking screenshot",
+        "type": "string",
+        "read": true,
+        "write": true,
+        "role": "text"
+      },
+      "native": {}
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "type": "panel",
+  "i18n": {
+    "additionalLaunchArgs": {
+      "en": "Additional arguments passed to the Puppeteer process",
+      "de": "Zusätzliche Argumente, die dem Puppeteer-Prozess übergeben werden",
+      "ru": "Дополнительные аргументы, переданные в процесс Puppeteer",
+      "pt": "Outros argumentos passaram para o processo Puppeteer",
+      "nl": "Aanvullende argumenten voor het Puppeteerproces",
+      "fr": "Autres arguments transmis au processus Puppeteer",
+      "it": "Ulteriori argomenti passati al processo Puppeteer",
+      "es": "Otros argumentos pasaron al proceso Puppeteer",
+      "pl": "Dodatkowe argumenty przekazane do procesu Puppeteer",
+      "uk": "Додаткові аргументи передані до процесу цуценя",
+      "zh-cn": "向Puppeteer进程提出的其他论点"
+    },
+    "useExternalBrowser": {
+      "en": "Use external browser",
+      "de": "Externen Browser verwenden",
+      "ru": "Используйте внешний браузер",
+      "pt": "Utilizar um navegador externo",
+      "nl": "Externe browser gebruiken",
+      "fr": "Utiliser un navigateur externe",
+      "it": "Utilizzare un browser esterno",
+      "es": "Utilizar un navegador externo",
+      "pl": "Korzystanie z zewnętrznej przeglądarki",
+      "uk": "Використовуйте зовнішній браузер",
+      "zh-cn": "使用外部浏览器"
+    },
+    "executablePath": {
+      "en": "Path to the external browser",
+      "de": "Pfad zum externen Browser",
+      "ru": "Путь к внешнему браузеру",
+      "pt": "Caminho para o navegador externo",
+      "nl": "Pad naar de externe browser",
+      "fr": "Chemin d'accès au navigateur externe",
+      "it": "Percorso del browser esterno",
+      "es": "Ruta al navegador externo",
+      "pl": "Ścieżka do zewnętrznej przeglądarki",
+      "uk": "Шлях до зовнішнього браузера",
+      "zh-cn": "外部浏览器的路径"
+    },
+    "webLoginCredentials": {
+      "en": "ioBroker Web Login Credentials",
+      "de": "ioBroker Web-Anmeldeinformationen",
+      "ru": "Учетные данные для входа в ioBroker Web",
+      "pt": "Credenciais de login da Web do ioBroker",
+      "nl": "ioBroker Web Login Gegevens",
+      "fr": "Identifiants de connexion Web ioBroker",
+      "it": "Credenziali di accesso Web ioBroker",
+      "es": "Credenciales de inicio de sesión web de ioBroker",
+      "pl": "Dane logowania do ioBroker Web",
+      "uk": "Облікові дані входу ioBroker Web",
+      "zh-cn": "ioBroker Web 登录凭据"
+    },
+    "webUsername": {
+      "en": "Username for ioBroker web interface",
+      "de": "Benutzername für ioBroker-Webschnittstelle",
+      "ru": "Имя пользователя для веб-интерфейса ioBroker",
+      "pt": "Nome de usuário para interface web ioBroker",
+      "nl": "Gebruikersnaam voor ioBroker webinterface",
+      "fr": "Nom d'utilisateur pour l'interface web ioBroker",
+      "it": "Nome utente per interfaccia web ioBroker",
+      "es": "Nombre de usuario para la interfaz web ioBroker",
+      "pl": "Nazwa użytkownika dla interfejsu webowego ioBroker",
+      "uk": "Ім'я користувача для веб-інтерфейсу ioBroker",
+      "zh-cn": "ioBroker Web 界面的用户名"
+    },
+    "webPassword": {
+      "en": "Password for ioBroker web interface",
+      "de": "Passwort für ioBroker-Webschnittstelle",
+      "ru": "Пароль для веб-интерфейса ioBroker",
+      "pt": "Senha para interface web ioBroker",
+      "nl": "Wachtwoord voor ioBroker webinterface",
+      "fr": "Mot de passe pour l'interface web ioBroker",
+      "it": "Password per interfaccia web ioBroker",
+      "es": "Contraseña para la interfaz web ioBroker",
+      "pl": "Hasło dla interfejsu webowego ioBroker",
+      "uk": "Пароль для веб-інтерфейсу ioBroker",
+      "zh-cn": "ioBroker Web 界面的密码"
+    }
+  },
+  "items": {
+    "useExternalBrowser": {
+      "type": "checkbox",
+      "label": "useExternalBrowser"
+    },
+    "executablePath": {
+      "placeholder": "/usr/bin/chromium-browser",
+      "hidden": "!data.useExternalBrowser",
+      "newLine": true,
+      "type": "text",
+      "label": "executablePath"
+    },
+    "additionalArgs": {
+      "newLine": true,
+      "label": "additionalLaunchArgs",
+      "type": "table",
+      "uniqueColumns": ["Argument"],
+      "xs": 12,
+      "items": [{
+        "attr": "Argument",
+        "label": "Argument",
+        "filter": false,
+        "sort": false,
+        "type": "autocomplete",
+        "freeSolo": true,
+        "options": [
+          "--disable-lcd-text",
+          "--disable-composited-antialiasing"
+        ]
+      }]
+    },
+    "_webLoginHeader": {
+      "newLine": true,
+      "type": "header",
+      "text": "webLoginCredentials",
+      "size": 5
+    },
+    "webUsername": {
+      "newLine": true,
+      "type": "text",
+      "label": "webUsername",
+      "placeholder": "admin"
+    },
+    "webPassword": {
+      "newLine": true,
+      "type": "password",
+      "label": "webPassword",
+      "visible": true,
+      "repeat": false
+    }
+  }
+}
