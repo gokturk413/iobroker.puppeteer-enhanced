@@ -3,8 +3,8 @@ node_modules/
 package-lock.json
 yarn.lock
 
-# Build output
-build/
+# Build output (keep build/ for ioBroker adapter)
+# build/
 dist/
 *.tsbuildinfo
 
