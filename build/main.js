@@ -25,6 +25,7 @@ var utils = __toESM(require("@iobroker/adapter-core"));
 var import_puppeteer = __toESM(require("puppeteer"));
 var import_tools = require("./lib/tools");
 var import_path = require("path");
+var import_fs = require("fs");
 class PuppeteerAdapter extends utils.Adapter {
   constructor(options = {}) {
     super({ ...options, name: "puppeteer-enhanced" });
@@ -42,12 +43,38 @@ class PuppeteerAdapter extends utils.Adapter {
       additionalArgs = this.config.additionalArgs.map((entry) => entry.Argument);
     }
     this.log.debug(`Additional arguments: ${JSON.stringify(additionalArgs)}`);
-    this.browser = await import_puppeteer.default.launch({
+    
+    const defaultArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu'
+    ];
+    
+    const launchOptions = {
       headless: true,
       defaultViewport: null,
       executablePath: this.config.useExternalBrowser ? this.config.executablePath : void 0,
-      args: additionalArgs
-    });
+      args: additionalArgs && additionalArgs.length > 0 ? additionalArgs : defaultArgs,
+      ignoreHTTPSErrors: true,
+      dumpio: true,  // Show browser console output for debugging
+      protocolTimeout: 180000  // 3 minutes protocol timeout
+    };
+    
+    this.log.info(`Launching browser with options: ${JSON.stringify(launchOptions)}`);
+    
+    try {
+      this.browser = await import_puppeteer.default.launch(launchOptions);
+      this.log.info("Browser launched successfully");
+    } catch (launchError) {
+      this.log.error(`Failed to launch browser: ${launchError.message}`);
+      this.log.error(`Error stack: ${launchError.stack}`);
+      throw launchError;
+    }
+    
     this.subscribeStates("url");
     this.log.info("Ready to take screenshots and export PDFs");
   }
@@ -74,15 +101,34 @@ class PuppeteerAdapter extends utils.Adapter {
    * @param obj the ioBroker message object
    */
   async onMessage(obj) {
-    if (!this.browser) {
+    if (!obj)
       return;
+    this.log.debug(`Received command: ${obj.command}`);
+    
+    // Check if browser is still connected
+    if (!this.browser || !this.browser.connected) {
+      this.log.warn("Browser not connected, attempting to restart...");
+      try {
+        if (this.browser) {
+          await this.browser.close().catch(() => {});
+        }
+        await this.onReady();
+        this.log.info("Browser restarted successfully");
+      } catch (e) {
+        this.log.error(`Failed to restart browser: ${e.message}`);
+        this.sendTo(obj.from, obj.command, { 
+          error: { message: "Browser not available", stack: e.stack } 
+        }, obj.callback);
+        return;
+      }
     }
-    this.log.debug(`Message: ${JSON.stringify(obj)}`);
+    
     if (obj.command === "screenshot") {
       let url;
       let options;
       if (typeof obj.message === "string") {
         url = obj.message;
+      } else if (typeof obj.message === "object") {
         options = {};
       } else {
         url = obj.message.url;
@@ -93,25 +139,33 @@ class PuppeteerAdapter extends utils.Adapter {
       const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
       const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
       const viewport = PuppeteerAdapter.extractViewportOptionsFromMessage(options);
+      let page;
       try {
         if (options.path) {
           this.validatePath(options.path);
         }
-        const page = await this.browser.newPage();
+        page = await this.browser.newPage();
         if (viewport) {
           await page.setViewport(viewport);
         }
         
         // Navigate to URL with error handling
+        let navigationSuccessful = false;
         try {
           await page.goto(url, { 
             waitUntil: "load",
             timeout: 60000 
           });
+          navigationSuccessful = true;
+          this.log.info('[Screenshot] Navigation successful');
         } catch (navError) {
-          this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          this.log.error(`[Screenshot] Navigation failed: ${navError.message}`);
+          this.log.error('[Screenshot] Cannot continue - page did not load');
+          throw new Error(`Navigation failed: ${navError.message}`);
         }
+        
+        // Wait a bit for frame to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Wait for VIS to be fully ready (handles login, loading, etc)
         const visReady = await this.waitForVISReady(page, url, credentials, 45000);
@@ -132,7 +186,6 @@ class PuppeteerAdapter extends utils.Adapter {
           this.log.debug(`Write file to "${storagePath}"`);
           await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(img));
         }
-        await page.close();
         this.sendTo(obj.from, obj.command, { result: img }, obj.callback);
       } catch (e) {
         this.log.error(`Could not take screenshot of "${url}": ${e.message}`);
@@ -144,6 +197,14 @@ class PuppeteerAdapter extends utils.Adapter {
             name: e.name 
           } 
         }, obj.callback);
+      } finally {
+        try {
+          if (page && !page.isClosed()) {
+            await page.close();
+          }
+        } catch (closeError) {
+          this.log.warn(`Error closing page: ${closeError.message}`);
+        }
       }
     } else if (obj.command === "pdf") {
       let url;
@@ -159,21 +220,40 @@ class PuppeteerAdapter extends utils.Adapter {
       const { waitMethod, waitParameter } = PuppeteerAdapter.extractWaitOptionFromMessage(options);
       const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
       const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
+      let page;
       try {
         if (options.path) {
           this.validatePath(options.path);
         }
-        const page = await this.browser.newPage();
+        page = await this.browser.newPage();
         
         // Navigate to URL with error handling
+        let navigationSuccessful = false;
         try {
           await page.goto(url, { 
             waitUntil: "load",
             timeout: 60000 
           });
+          navigationSuccessful = true;
+          this.log.info('[PDF] Navigation successful');
         } catch (navError) {
-          this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          this.log.error(`[PDF] Navigation failed: ${navError.message}`);
+          this.log.error('[PDF] Cannot continue - page did not load');
+          throw new Error(`Navigation failed: ${navError.message}`);
+        }
+        
+        // Wait a bit for frame to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Debug: Log page URL and content
+        try {
+          const pageUrl = page.url();
+          const pageTitle = await page.title();
+          const bodyHTML = await page.evaluate(() => document.body.innerHTML.substring(0, 500));
+          this.log.info(`[PDF] Page loaded: URL=${pageUrl}, Title=${pageTitle}`);
+          this.log.debug(`[PDF] Body HTML preview: ${bodyHTML}`);
+        } catch (e) {
+          this.log.warn(`[PDF] Could not get page info: ${e.message}`);
         }
         
         // Wait for VIS to be fully ready (handles login, loading, etc)
@@ -195,7 +275,6 @@ class PuppeteerAdapter extends utils.Adapter {
           this.log.debug(`Write PDF file to "${storagePath}"`);
           await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(pdf));
         }
-        await page.close();
         this.sendTo(obj.from, obj.command, { result: pdf }, obj.callback);
       } catch (e) {
         this.log.error(`Could not export PDF of "${url}": ${e.message}`);
@@ -207,6 +286,14 @@ class PuppeteerAdapter extends utils.Adapter {
             name: e.name 
           } 
         }, obj.callback);
+      } finally {
+        try {
+          if (page && !page.isClosed()) {
+            await page.close();
+          }
+        } catch (closeError) {
+          this.log.warn(`Error closing page: ${closeError.message}`);
+        }
       }
     } else {
       this.log.error(`Unsupported message command: ${obj.command}`);
@@ -324,10 +411,19 @@ class PuppeteerAdapter extends utils.Adapter {
     // Loop until VIS is ready or timeout
     while (Date.now() - startTime < maxWaitTime) {
       try {
+        // Check if page is ready for evaluation
+        if (page.isClosed()) {
+          this.log.error("Page is closed, cannot check VIS state");
+          return false;
+        }
+        
+        // Wait a bit before checking
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Check for login page
         const needsLogin = await page.evaluate(() => {
           return document.querySelector('input[type="password"]') !== null;
-        });
+        }).catch(() => false);
         
         if (needsLogin && credentials && credentials.username && credentials.password) {
           this.log.info("Login page detected, attempting login...");
@@ -342,7 +438,7 @@ class PuppeteerAdapter extends utils.Adapter {
           return bodyText.includes('connecting') || 
                  bodyText.includes('loading') ||
                  bodyText.includes('verbinden');
-        });
+        }).catch(() => false);
         
         if (isConnecting) {
           this.log.debug("VIS is connecting/loading, waiting...");
@@ -385,17 +481,23 @@ class PuppeteerAdapter extends utils.Adapter {
             if (activeView) {
               const viewId = activeView.getAttribute('data-vis-contains') || 
                             activeView.id || 
-                            activeView.className;
+                            activeView.className || 
+                            '';
               // Check if the active view matches the requested view
-              const isCorrectView = viewId.toLowerCase().includes(urlHash.toLowerCase());
-              return hasView && hasWidgets && hasContent && isCorrectView;
+              if (viewId) {
+                const isCorrectView = viewId.toLowerCase().includes(urlHash.toLowerCase());
+                return hasView && hasWidgets && hasContent && isCorrectView;
+              }
             }
             return false; // Specific view requested but not found
           }
           
           // No specific view requested, just check general VIS readiness
           return hasView && hasWidgets && hasContent;
-        }, url);
+        }, url).catch((err) => {
+          this.log.debug(`Error evaluating VIS ready state: ${err.message}`);
+          return false;
+        });
         
         if (visReady) {
           // Log which view is active
@@ -405,7 +507,7 @@ class PuppeteerAdapter extends utils.Adapter {
               return activeView.getAttribute('data-vis-contains') || activeView.id || 'unknown';
             }
             return 'no active view';
-          });
+          }).catch(() => 'unknown');
           this.log.info(`VIS page is ready! Active view: ${activeViewInfo}`);
           
           // Extra wait for widgets to fully render
@@ -421,7 +523,7 @@ class PuppeteerAdapter extends utils.Adapter {
             const viewName = activeView ? (activeView.getAttribute('data-vis-contains') || activeView.id) : 'none';
             const widgetCount = document.querySelectorAll('.vis-widget').length;
             return `View: ${viewName}, Widgets: ${widgetCount}`;
-          });
+          }).catch(() => 'State unavailable');
           this.log.debug(`Current VIS state: ${currentState}`);
         }
         
@@ -582,14 +684,15 @@ class PuppeteerAdapter extends utils.Adapter {
       // Wait for navigation or login to complete
       // Use Promise.race to handle both navigation and timeout scenarios
       await Promise.race([
-        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 }).catch(() => {
-          this.log.debug("No navigation detected after login");
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 5000 }).catch((err) => {
+          this.log.debug(`No navigation detected after login: ${err.message}`);
+          return Promise.resolve(); // Resolve to avoid error propagation
         }),
-        new Promise((resolve) => setTimeout(resolve, 10000))
+        new Promise((resolve) => setTimeout(resolve, 3000))
       ]);
 
       // Additional wait for any post-login scripts
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       this.log.info("Login completed successfully");
       return true;
@@ -600,6 +703,7 @@ class PuppeteerAdapter extends utils.Adapter {
   }
   /**
    * Validates that the given path is valid to save a screenshot too, prevents node_modules and dataDir
+   * Also creates the directory if it doesn't exist
    *
    * @param path path to check
    */
@@ -611,6 +715,18 @@ class PuppeteerAdapter extends utils.Adapter {
     }
     if (path.includes(`${import_path.sep}node_modules${import_path.sep}`)) {
       throw new Error("Screenshots cannot be stored inside a node_modules folder");
+    }
+    
+    // Create directory if it doesn't exist
+    const directory = (0, import_path.dirname)(path);
+    if (!import_fs.existsSync(directory)) {
+      this.log.info(`Creating directory: ${directory}`);
+      try {
+        import_fs.mkdirSync(directory, { recursive: true });
+        this.log.debug(`Directory created successfully: ${directory}`);
+      } catch (err) {
+        throw new Error(`Could not create directory "${directory}": ${err.message}`);
+      }
     }
   }
   /**
