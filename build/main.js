@@ -122,7 +122,7 @@ class PuppeteerAdapter extends utils.Adapter {
         }
         
         // Extra wait for dynamic content
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
         
         const img = await page.screenshot(options);
         if (storagePath) {
@@ -170,7 +170,7 @@ class PuppeteerAdapter extends utils.Adapter {
           });
         } catch (navError) {
           this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 30000));
         }
         
         // Wait for VIS to be fully ready (handles login, loading, etc)
@@ -308,6 +308,13 @@ class PuppeteerAdapter extends utils.Adapter {
     
     this.log.debug("Waiting for VIS page to be ready...");
     
+    // Extract hash/view from URL
+    const urlParts = url.split('#');
+    const targetView = urlParts[1];
+    if (targetView) {
+      this.log.info(`Target VIS view: ${targetView}`);
+    }
+    
     // Loop until VIS is ready or timeout
     while (Date.now() - startTime < maxWaitTime) {
       try {
@@ -337,23 +344,79 @@ class PuppeteerAdapter extends utils.Adapter {
           continue;
         }
         
+        // If specific view requested, try to navigate to it
+        if (targetView) {
+          try {
+            await page.evaluate((viewName) => {
+              // Try VIS changeView function if available
+              if (typeof vis !== 'undefined' && vis.changeView) {
+                vis.changeView(viewName);
+              }
+              // Also update hash
+              window.location.hash = viewName;
+            }, targetView);
+            this.log.debug(`Attempted to switch to view: ${targetView}`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (e) {
+            // Ignore errors, continue checking
+          }
+        }
+        
         // Check if VIS view is loaded
-        const visReady = await page.evaluate(() => {
+        const visReady = await page.evaluate((targetUrl) => {
+          // Extract view name from hash (e.g., #DailyReport)
+          const urlHash = targetUrl.split('#')[1];
+          
           // Check for VIS-specific elements
           const hasView = document.querySelector('.vis-view') !== null ||
                          document.querySelector('[data-vis-contains]') !== null;
           const hasWidgets = document.querySelectorAll('.vis-widget').length > 0;
           const hasContent = document.body.innerText.trim().length > 100;
           
+          // If URL has specific view hash, check if that view is active
+          if (urlHash) {
+            const activeView = document.querySelector('.vis-view.vis-view-active');
+            if (activeView) {
+              const viewId = activeView.getAttribute('data-vis-contains') || 
+                            activeView.id || 
+                            activeView.className;
+              // Check if the active view matches the requested view
+              const isCorrectView = viewId.toLowerCase().includes(urlHash.toLowerCase());
+              return hasView && hasWidgets && hasContent && isCorrectView;
+            }
+            return false; // Specific view requested but not found
+          }
+          
+          // No specific view requested, just check general VIS readiness
           return hasView && hasWidgets && hasContent;
-        });
+        }, url);
         
         if (visReady) {
-          this.log.info("VIS page is ready!");
+          // Log which view is active
+          const activeViewInfo = await page.evaluate(() => {
+            const activeView = document.querySelector('.vis-view.vis-view-active');
+            if (activeView) {
+              return activeView.getAttribute('data-vis-contains') || activeView.id || 'unknown';
+            }
+            return 'no active view';
+          });
+          this.log.info(`VIS page is ready! Active view: ${activeViewInfo}`);
+          
           // Extra wait for widgets to fully render
           await new Promise(resolve => setTimeout(resolve, 3000));
           this.log.debug("Extra wait completed, VIS should be fully rendered");
           return true;
+        }
+        
+        // Debug: log current state every 5 seconds
+        if ((Date.now() - startTime) % 5000 < 500) {
+          const currentState = await page.evaluate(() => {
+            const activeView = document.querySelector('.vis-view.vis-view-active');
+            const viewName = activeView ? (activeView.getAttribute('data-vis-contains') || activeView.id) : 'none';
+            const widgetCount = document.querySelectorAll('.vis-widget').length;
+            return `View: ${viewName}, Widgets: ${widgetCount}`;
+          });
+          this.log.debug(`Current VIS state: ${currentState}`);
         }
         
         // Wait a bit before next check
