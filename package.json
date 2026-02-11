@@ -1,5 +1,5 @@
 {
-  "name": "iobroker.puppeteer-enhanced",
+  "name": "iobroker.puppeteer",
   "version": "0.5.0",
   "description": "Headless browser to generate screenshots and PDF exports based on Chrome",
   "author": {
