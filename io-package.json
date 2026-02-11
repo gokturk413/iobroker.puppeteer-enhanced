@@ -1,6 +1,6 @@
 {
   "common": {
-    "name": "puppeteer",
+    "name": "puppeteer-enhanced",
     "version": "0.5.0",
     "news": {
       "0.5.0": {

@@ -27,7 +27,7 @@ var import_tools = require("./lib/tools");
 var import_path = require("path");
 class PuppeteerAdapter extends utils.Adapter {
   constructor(options = {}) {
-    super({ ...options, name: "puppeteer" });
+    super({ ...options, name: "puppeteer-enhanced" });
     this.on("ready", this.onReady.bind(this));
     this.on("stateChange", this.onStateChange.bind(this));
     this.on("unload", this.onUnload.bind(this));
