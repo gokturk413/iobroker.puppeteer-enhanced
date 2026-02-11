@@ -101,11 +101,29 @@ class PuppeteerAdapter extends utils.Adapter {
         if (viewport) {
           await page.setViewport(viewport);
         }
-        await page.goto(url, { waitUntil: "networkidle2" });
-        await this.handleIoBrokerLogin(page, url, credentials);
+        
+        // Navigate to URL with error handling
+        try {
+          await page.goto(url, { 
+            waitUntil: "load",
+            timeout: 60000 
+          });
+        } catch (navError) {
+          this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        // Wait for VIS to be fully ready (handles login, loading, etc)
+        await this.waitForVISReady(page, url, credentials, 30000);
+        
+        // Additional wait if specified
         if (waitMethod && waitMethod in page) {
           await page[waitMethod](waitParameter);
         }
+        
+        // Extra wait for dynamic content
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         const img = await page.screenshot(options);
         if (storagePath) {
           this.log.debug(`Write file to "${storagePath}"`);
@@ -115,7 +133,14 @@ class PuppeteerAdapter extends utils.Adapter {
         this.sendTo(obj.from, obj.command, { result: img }, obj.callback);
       } catch (e) {
         this.log.error(`Could not take screenshot of "${url}": ${e.message}`);
-        this.sendTo(obj.from, obj.command, { error: e }, obj.callback);
+        this.log.error(`Error stack: ${e.stack}`);
+        this.sendTo(obj.from, obj.command, { 
+          error: { 
+            message: e.message, 
+            stack: e.stack,
+            name: e.name 
+          } 
+        }, obj.callback);
       }
     } else if (obj.command === "pdf") {
       let url;
@@ -136,11 +161,29 @@ class PuppeteerAdapter extends utils.Adapter {
           this.validatePath(options.path);
         }
         const page = await this.browser.newPage();
-        await page.goto(url, { waitUntil: "networkidle2" });
-        await this.handleIoBrokerLogin(page, url, credentials);
+        
+        // Navigate to URL with error handling
+        try {
+          await page.goto(url, { 
+            waitUntil: "load",
+            timeout: 60000 
+          });
+        } catch (navError) {
+          this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        // Wait for VIS to be fully ready (handles login, loading, etc)
+        await this.waitForVISReady(page, url, credentials, 30000);
+        
+        // Additional wait if specified
         if (waitMethod && waitMethod in page) {
           await page[waitMethod](waitParameter);
         }
+        
+        // Extra wait for dynamic content
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         const pdf = await page.pdf(options);
         if (storagePath) {
           this.log.debug(`Write PDF file to "${storagePath}"`);
@@ -150,7 +193,14 @@ class PuppeteerAdapter extends utils.Adapter {
         this.sendTo(obj.from, obj.command, { result: pdf }, obj.callback);
       } catch (e) {
         this.log.error(`Could not export PDF of "${url}": ${e.message}`);
-        this.sendTo(obj.from, obj.command, { error: e }, obj.callback);
+        this.log.error(`Error stack: ${e.stack}`);
+        this.sendTo(obj.from, obj.command, { 
+          error: { 
+            message: e.message, 
+            stack: e.stack,
+            name: e.name 
+          } 
+        }, obj.callback);
       }
     } else {
       this.log.error(`Unsupported message command: ${obj.command}`);
@@ -245,6 +295,80 @@ class PuppeteerAdapter extends utils.Adapter {
     }
     return options;
   }
+  /**
+   * Wait for VIS page to be fully loaded (handles login, loading states)
+   *
+   * @param page active page object
+   * @param url the URL being accessed
+   * @param credentials optional credentials object with username and password
+   * @param maxWaitTime maximum time to wait in milliseconds
+   */
+  async waitForVISReady(page, url, credentials, maxWaitTime = 30000) {
+    const startTime = Date.now();
+    
+    this.log.debug("Waiting for VIS page to be ready...");
+    
+    // Loop until VIS is ready or timeout
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        // Check for login page
+        const needsLogin = await page.evaluate(() => {
+          return document.querySelector('input[type="password"]') !== null;
+        });
+        
+        if (needsLogin && credentials && credentials.username && credentials.password) {
+          this.log.info("Login page detected, attempting login...");
+          await this.handleIoBrokerLogin(page, url, credentials);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        
+        // Check for "server connecting" or loading state
+        const isConnecting = await page.evaluate(() => {
+          const bodyText = document.body.innerText.toLowerCase();
+          return bodyText.includes('connecting') || 
+                 bodyText.includes('loading') ||
+                 bodyText.includes('verbinden');
+        });
+        
+        if (isConnecting) {
+          this.log.debug("VIS is connecting/loading, waiting...");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        // Check if VIS view is loaded
+        const visReady = await page.evaluate(() => {
+          // Check for VIS-specific elements
+          const hasView = document.querySelector('.vis-view') !== null ||
+                         document.querySelector('[data-vis-contains]') !== null;
+          const hasWidgets = document.querySelectorAll('.vis-widget').length > 0;
+          const hasContent = document.body.innerText.trim().length > 100;
+          
+          return hasView && hasWidgets && hasContent;
+        });
+        
+        if (visReady) {
+          this.log.info("VIS page is ready!");
+          // Extra wait for widgets to fully render
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          this.log.debug("Extra wait completed, VIS should be fully rendered");
+          return true;
+        }
+        
+        // Wait a bit before next check
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (e) {
+        this.log.warn(`Error checking VIS state: ${e.message}`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms`);
+    return false;
+  }
+  
   /**
    * Handles ioBroker web login if login page is detected
    *
@@ -377,14 +501,14 @@ class PuppeteerAdapter extends utils.Adapter {
       // Wait for navigation or login to complete
       // Use Promise.race to handle both navigation and timeout scenarios
       await Promise.race([
-        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 5000 }).catch(() => {
+        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 }).catch(() => {
           this.log.debug("No navigation detected after login");
         }),
-        new Promise((resolve) => setTimeout(resolve, 3000))
+        new Promise((resolve) => setTimeout(resolve, 10000))
       ]);
 
       // Additional wait for any post-login scripts
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
       this.log.info("Login completed successfully");
       return true;
