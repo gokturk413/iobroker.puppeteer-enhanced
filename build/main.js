@@ -380,7 +380,7 @@ class PuppeteerAdapter extends utils.Adapter {
       });
 
       // Wait a bit for any post-login redirects or scripts
-      await page.waitForTimeout(2000);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       this.log.info("Login completed successfully");
       return true;
