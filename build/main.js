@@ -375,11 +375,15 @@ class PuppeteerAdapter extends utils.Adapter {
       }
 
       // Wait for navigation or login to complete
-      await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 }).catch(() => {
-        this.log.debug("No navigation after login, page might have reloaded");
-      });
+      // Use Promise.race to handle both navigation and timeout scenarios
+      await Promise.race([
+        page.waitForNavigation({ waitUntil: "networkidle2", timeout: 5000 }).catch(() => {
+          this.log.debug("No navigation detected after login");
+        }),
+        new Promise((resolve) => setTimeout(resolve, 3000))
+      ]);
 
-      // Wait a bit for any post-login redirects or scripts
+      // Additional wait for any post-login scripts
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       this.log.info("Login completed successfully");
