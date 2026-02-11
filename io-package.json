@@ -204,6 +204,11 @@
     },
     "tier": 2,
     "main": "build/main.js",
+    "nogit": true,
+    "supportCustoms": false,
+    "adminTab": {
+      "singleton": true
+    },
     "licenseInformation": {
       "type": "free",
       "license": "MIT"
