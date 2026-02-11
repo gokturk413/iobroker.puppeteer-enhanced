@@ -114,7 +114,10 @@ class PuppeteerAdapter extends utils.Adapter {
         }
         
         // Wait for VIS to be fully ready (handles login, loading, etc)
-        await this.waitForVISReady(page, url, credentials, 30000);
+        const visReady = await this.waitForVISReady(page, url, credentials, 45000);
+        if (!visReady) {
+          this.log.warn("VIS ready check timed out, attempting screenshot anyway...");
+        }
         
         // Additional wait if specified
         if (waitMethod && waitMethod in page) {
@@ -122,7 +125,7 @@ class PuppeteerAdapter extends utils.Adapter {
         }
         
         // Extra wait for dynamic content
-        await new Promise(resolve => setTimeout(resolve, 10000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         const img = await page.screenshot(options);
         if (storagePath) {
@@ -170,11 +173,14 @@ class PuppeteerAdapter extends utils.Adapter {
           });
         } catch (navError) {
           this.log.warn(`Navigation warning: ${navError.message}, attempting to continue...`);
-          await new Promise(resolve => setTimeout(resolve, 30000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
         // Wait for VIS to be fully ready (handles login, loading, etc)
-        await this.waitForVISReady(page, url, credentials, 30000);
+        const visReady = await this.waitForVISReady(page, url, credentials, 45000);
+        if (!visReady) {
+          this.log.warn("VIS ready check timed out, attempting PDF export anyway...");
+        }
         
         // Additional wait if specified
         if (waitMethod && waitMethod in page) {
@@ -428,7 +434,19 @@ class PuppeteerAdapter extends utils.Adapter {
       }
     }
     
-    this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms`);
+    // Timeout reached, log final state
+    try {
+      const finalState = await page.evaluate(() => {
+        const activeView = document.querySelector('.vis-view.vis-view-active');
+        const viewName = activeView ? (activeView.getAttribute('data-vis-contains') || activeView.id) : 'none';
+        const widgetCount = document.querySelectorAll('.vis-widget').length;
+        const hasContent = document.body.innerText.trim().length;
+        return `View: ${viewName}, Widgets: ${widgetCount}, Content length: ${hasContent}`;
+      });
+      this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms. Final state: ${finalState}`);
+    } catch (e) {
+      this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms`);
+    }
     return false;
   }
   
