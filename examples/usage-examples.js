@@ -1,5 +1,5 @@
 /**
- * Usage examples for iobroker.puppeteer adapter
+ * Usage examples for iobroker.puppeteer-enhanced adapter
  * These examples demonstrate the new features:
  * - Screenshot functionality
  * - PDF export functionality
@@ -11,7 +11,7 @@
 // ============================================
 
 // Example 1: Simple screenshot
-sendTo('puppeteer.0', 'screenshot', 'https://www.google.com', (result) => {
+sendTo('puppeteer-enhanced.0', 'screenshot', 'https://www.google.com', (result) => {
     if (result.error) {
         console.log('Error: ' + result.error.message);
     } else {
@@ -20,7 +20,7 @@ sendTo('puppeteer.0', 'screenshot', 'https://www.google.com', (result) => {
 });
 
 // Example 2: Screenshot with file path
-sendTo('puppeteer.0', 'screenshot', {
+sendTo('puppeteer-enhanced.0', 'screenshot', {
     url: 'https://www.google.com',
     path: '/tmp/screenshot.png',
     fullPage: true
@@ -29,7 +29,7 @@ sendTo('puppeteer.0', 'screenshot', {
 });
 
 // Example 3: Screenshot with ioBroker storage
-sendTo('puppeteer.0', 'screenshot', {
+sendTo('puppeteer-enhanced.0', 'screenshot', {
     url: 'https://www.google.com',
     ioBrokerOptions: {
         storagePath: 'screenshots/google.png'
@@ -39,7 +39,7 @@ sendTo('puppeteer.0', 'screenshot', {
 });
 
 // Example 4: Screenshot with login credentials
-sendTo('puppeteer.0', 'screenshot', {
+sendTo('puppeteer-enhanced.0', 'screenshot', {
     url: 'http://192.168.1.100:8082/vis/index.html',
     path: '/tmp/vis-screenshot.png',
     loginCredentials: {
@@ -52,7 +52,7 @@ sendTo('puppeteer.0', 'screenshot', {
 });
 
 // Example 5: Screenshot with wait and viewport options
-sendTo('puppeteer.0', 'screenshot', {
+sendTo('puppeteer-enhanced.0', 'screenshot', {
     url: 'https://www.example.com',
     path: '/tmp/example.png',
     waitOption: {
@@ -69,7 +69,7 @@ sendTo('puppeteer.0', 'screenshot', {
 // ============================================
 
 // Example 6: Simple PDF export
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.google.com',
     path: '/tmp/google.pdf'
 }, (result) => {
@@ -81,7 +81,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 7: PDF with A4 format and margins
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.example.com',
     path: '/tmp/document.pdf',
     format: 'A4',
@@ -97,7 +97,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 8: Landscape PDF with header and footer
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.example.com',
     path: '/tmp/landscape.pdf',
     format: 'A4',
@@ -109,7 +109,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 9: PDF from ioBroker VIS with login
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'http://192.168.1.100:8082/vis/index.html',
     path: '/tmp/vis-export.pdf',
     loginCredentials: {
@@ -126,7 +126,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 10: PDF saved to ioBroker storage
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.example.com',
     ioBrokerOptions: {
         storagePath: 'documents/report.pdf'
@@ -140,7 +140,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 11: Custom page size PDF
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.example.com',
     path: '/tmp/custom.pdf',
     width: '210mm',
@@ -150,7 +150,7 @@ sendTo('puppeteer.0', 'pdf', {
 });
 
 // Example 12: PDF with specific page ranges
-sendTo('puppeteer.0', 'pdf', {
+sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'https://www.example.com',
     path: '/tmp/pages.pdf',
     pageRanges: '1-3, 5',  // Export pages 1, 2, 3, and 5
@@ -182,20 +182,20 @@ sendTo('puppeteer.0', 'pdf', {
 // ============================================
 
 // Example 13: Using states to take screenshot
-setState('puppeteer.0.filename', '/tmp/state-screenshot.png', false);
-setState('puppeteer.0.fullPage', true, false);
-setState('puppeteer.0.url', 'https://www.google.com', false);  // This triggers the screenshot
+setState('puppeteer-enhanced.0.filename', '/tmp/state-screenshot.png', false);
+setState('puppeteer-enhanced.0.fullPage', true, false);
+setState('puppeteer-enhanced.0.url', 'https://www.google.com', false);  // This triggers the screenshot
 
 // Example 14: Screenshot with crop options via states
-setState('puppeteer.0.filename', '/tmp/cropped.png', false);
-setState('puppeteer.0.fullPage', false, false);
-setState('puppeteer.0.clipLeft', 0, false);
-setState('puppeteer.0.clipTop', 0, false);
-setState('puppeteer.0.clipWidth', 800, false);
-setState('puppeteer.0.clipHeight', 600, false);
-setState('puppeteer.0.url', 'https://www.google.com', false);
+setState('puppeteer-enhanced.0.filename', '/tmp/cropped.png', false);
+setState('puppeteer-enhanced.0.fullPage', false, false);
+setState('puppeteer-enhanced.0.clipLeft', 0, false);
+setState('puppeteer-enhanced.0.clipTop', 0, false);
+setState('puppeteer-enhanced.0.clipWidth', 800, false);
+setState('puppeteer-enhanced.0.clipHeight', 600, false);
+setState('puppeteer-enhanced.0.url', 'https://www.google.com', false);
 
 // Example 15: Screenshot with wait for selector via states
-setState('puppeteer.0.filename', '/tmp/waited.png', false);
-setState('puppeteer.0.waitForSelector', '#main-content', false);
-setState('puppeteer.0.url', 'https://www.example.com', false);
+setState('puppeteer-enhanced.0.filename', '/tmp/waited.png', false);
+setState('puppeteer-enhanced.0.waitForSelector', '#main-content', false);
+setState('puppeteer-enhanced.0.url', 'https://www.example.com', false);
