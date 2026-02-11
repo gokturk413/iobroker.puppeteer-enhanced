@@ -203,11 +203,11 @@
       ]
     },
     "tier": 2,
+    "main": "build/main.js",
     "licenseInformation": {
       "type": "free",
       "license": "MIT"
-    },
-    "installedFrom": "iobroker.puppeteer@0.5.0"
+    }
   },
   "native": {
     "additionalArgs": [],
