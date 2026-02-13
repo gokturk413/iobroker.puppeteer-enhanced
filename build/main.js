@@ -26,6 +26,7 @@ var import_puppeteer = __toESM(require("puppeteer"));
 var import_tools = require("./lib/tools");
 var import_path = require("path");
 var import_fs = require("fs");
+
 class PuppeteerAdapter extends utils.Adapter {
   constructor(options = {}) {
     super({ ...options, name: "puppeteer-enhanced" });
@@ -43,8 +44,9 @@ class PuppeteerAdapter extends utils.Adapter {
       additionalArgs = this.config.additionalArgs.map((entry) => entry.Argument);
     }
     this.log.debug(`Additional arguments: ${JSON.stringify(additionalArgs)}`);
-    
+
     const defaultArgs = [
+      '--disable-cache',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -53,7 +55,7 @@ class PuppeteerAdapter extends utils.Adapter {
       '--no-zygote',
       '--disable-gpu'
     ];
-    
+
     const launchOptions = {
       headless: true,
       defaultViewport: null,
@@ -63,9 +65,9 @@ class PuppeteerAdapter extends utils.Adapter {
       dumpio: true,  // Show browser console output for debugging
       protocolTimeout: 180000  // 3 minutes protocol timeout
     };
-    
+
     this.log.info(`Launching browser with options: ${JSON.stringify(launchOptions)}`);
-    
+
     try {
       this.browser = await import_puppeteer.default.launch(launchOptions);
       this.log.info("Browser launched successfully");
@@ -74,7 +76,7 @@ class PuppeteerAdapter extends utils.Adapter {
       this.log.error(`Error stack: ${launchError.stack}`);
       throw launchError;
     }
-    
+
     this.subscribeStates("url");
     this.log.info("Ready to take screenshots and export PDFs");
   }
@@ -87,11 +89,17 @@ class PuppeteerAdapter extends utils.Adapter {
     try {
       if (this.browser) {
         this.log.info("Closing browser");
-        await this.browser.close();
+        await Promise.race([
+          this.browser.close(),
+          new Promise((resolve) => setTimeout(resolve, 5000))
+        ]);
         this.browser = void 0;
+        // Wait for cleanup
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       callback();
-    } catch {
+    } catch (e) {
+      this.log.debug(`Error during unload: ${e.message}`);
       callback();
     }
   }
@@ -104,25 +112,25 @@ class PuppeteerAdapter extends utils.Adapter {
     if (!obj)
       return;
     this.log.debug(`Received command: ${obj.command}`);
-    
+
     // Check if browser is still connected
     if (!this.browser || !this.browser.connected) {
       this.log.warn("Browser not connected, attempting to restart...");
       try {
         if (this.browser) {
-          await this.browser.close().catch(() => {});
+          await this.browser.close().catch(() => { });
         }
         await this.onReady();
         this.log.info("Browser restarted successfully");
       } catch (e) {
         this.log.error(`Failed to restart browser: ${e.message}`);
-        this.sendTo(obj.from, obj.command, { 
-          error: { message: "Browser not available", stack: e.stack } 
+        this.sendTo(obj.from, obj.command, {
+          error: { message: "Browser not available", stack: e.stack }
         }, obj.callback);
         return;
       }
     }
-    
+
     if (obj.command === "screenshot") {
       let url;
       let options;
@@ -140,47 +148,153 @@ class PuppeteerAdapter extends utils.Adapter {
       const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
       const viewport = PuppeteerAdapter.extractViewportOptionsFromMessage(options);
       let page;
+      let customBrowser;
+      let tempUserDataDir;  // Declare here to be accessible in finally block
       try {
         if (options.path) {
           this.validatePath(options.path);
         }
-        page = await this.browser.newPage();
+
+        // If custom Chrome executable specified, launch separate browser instance
+        if (options.executablePath) {
+          this.log.info(`Using custom Chrome: ${options.executablePath}`);
+
+          // Create persistent temp directory to avoid cleanup issues
+          const os = require('os');
+          const path = require('path');
+          tempUserDataDir = path.join(os.tmpdir(), `pup_chrome_${Date.now()}`);
+
+          customBrowser = await import_puppeteer.default.launch({
+            headless: false,
+            executablePath: options.executablePath,
+            defaultViewport: null,
+            userDataDir: tempUserDataDir,  // Persistent profile to avoid EBUSY
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-logging'],
+            ignoreHTTPSErrors: true,
+            dumpio: false,  // Disable to prevent chrome_debug.log locks
+            protocolTimeout: 180000
+          });
+          page = await customBrowser.newPage();
+        } else {
+          page = await this.browser.newPage();
+        }
+
         if (viewport) {
           await page.setViewport(viewport);
         }
-        
-        // Navigate to URL with error handling
-        let navigationSuccessful = false;
-        try {
-          await page.goto(url, { 
-            waitUntil: "load",
-            timeout: 60000 
-          });
-          navigationSuccessful = true;
-          this.log.info('[Screenshot] Navigation successful');
-        } catch (navError) {
-          this.log.error(`[Screenshot] Navigation failed: ${navError.message}`);
-          this.log.error('[Screenshot] Cannot continue - page did not load');
-          throw new Error(`Navigation failed: ${navError.message}`);
+
+        // Wait for page to be ready
+        await page.waitForTimeout(500);
+
+        // Check if loginHtmlPath is provided (2023 approach)
+        const loginHtmlPath = options.loginHtmlPath;
+
+        if (loginHtmlPath && credentials && credentials.username && credentials.password) {
+          // 2023 approach: Load HTML file, then navigate to VIS
+          this.log.info(`Using HTML login file: ${loginHtmlPath}`);
+
+          try {
+            const loginHtml = await import_fs.promises.readFile(loginHtmlPath, 'utf8');
+            await page.setContent(loginHtml);
+            this.log.info('Login HTML loaded');
+
+            // Wait for login form to process (2023 API: 5s → 2s for speed)
+            await page.waitForTimeout(2000);
+
+            // Navigate to target URL
+            await page.goto(url, {
+              waitUntil: "domcontentloaded",
+              timeout: 30000
+            });
+            this.log.info('[Screenshot] Navigation successful after HTML login');
+
+            // Wait for page to load completely (2023 API: 10s → 3s for speed)
+            await page.waitForTimeout(3000);
+
+          } catch (htmlError) {
+            this.log.warn(`HTML login failed: ${htmlError.message} - trying standard login`);
+            // Fallback to standard login approach
+            await page.goto(url, {
+              waitUntil: "domcontentloaded",
+              timeout: 30000
+            });
+          }
+        } else {
+          // Standard approach: Navigate to full URL (like 2023)
+          try {
+            await page.goto(url, {  // Full URL with hash (2023 style)
+              waitUntil: "networkidle2",  // Wait for network idle (web components support)
+              timeout: 30000
+            });
+            this.log.info('[Screenshot] Navigation successful');
+          } catch (navError) {
+            this.log.warn(`Navigation timeout: ${navError.message} - trying with domcontentloaded`);
+            await page.goto(url, {
+              waitUntil: "domcontentloaded",
+              timeout: 30000
+            });
+            this.log.info('[Screenshot] Navigation successful (fallback)');
+          }
         }
-        
-        // Wait a bit for frame to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Wait for VIS to be fully ready (handles login, loading, etc)
-        const visReady = await this.waitForVISReady(page, url, credentials, 45000);
-        if (!visReady) {
-          this.log.warn("VIS ready check timed out, attempting screenshot anyway...");
+
+        // Check for login and handle if needed (skip if HTML login was used)
+        if (!loginHtmlPath && credentials && credentials.username && credentials.password) {
+          let needsLogin = false;
+          try {
+            needsLogin = await page.evaluate(() => {
+              return document.querySelector('input[type="password"]') !== null;
+            });
+          } catch (evalErr) {
+            this.log.debug(`Could not check for login: ${evalErr.message}`);
+            needsLogin = false;
+          }
+
+          if (needsLogin) {
+            this.log.info("Login page detected, attempting login...");
+
+            try {
+              await this.handleIoBrokerLogin(page, url, credentials);
+              this.log.debug('Login function completed');
+            } catch (loginErr) {
+              this.log.warn(`Login failed: ${loginErr.message} - continuing anyway`);
+            }
+
+            // Check if page still alive after login
+            if (page.isClosed()) {
+              throw new Error('Page closed during login process');
+            }
+
+            // Wait for page to stabilize after login (2023 API: 10s → 5s)
+            this.log.debug('Waiting 5s for page stabilization...');
+            try {
+              await page.waitForTimeout(5000);
+            } catch (waitErr) {
+              this.log.warn(`Wait timeout error: ${waitErr.message}`);
+            }
+
+            // Verify page is still alive
+            if (page.isClosed()) {
+              throw new Error('Page closed during post-login wait');
+            }
+            this.log.debug('Page still alive after login');
+          }
         }
-        
+
         // Additional wait if specified
         if (waitMethod && waitMethod in page) {
           await page[waitMethod](waitParameter);
         }
-        
-        // Extra wait for dynamic content
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
+        // Wait for web components to render (for ioBroker.webui etc.)
+        this.log.debug('Waiting for web components...');
+        await page.waitForTimeout(2000);
+
+        // Check if page is still open
+        if (page.isClosed()) {
+          throw new Error('Page closed before screenshot');
+        }
+
+        this.log.info('Taking screenshot...');
         const img = await page.screenshot(options);
         if (storagePath) {
           this.log.debug(`Write file to "${storagePath}"`);
@@ -190,23 +304,100 @@ class PuppeteerAdapter extends utils.Adapter {
       } catch (e) {
         this.log.error(`Could not take screenshot of "${url}": ${e.message}`);
         this.log.error(`Error stack: ${e.stack}`);
-        this.sendTo(obj.from, obj.command, { 
-          error: { 
-            message: e.message, 
+        this.sendTo(obj.from, obj.command, {
+          error: {
+            message: e.message,
             stack: e.stack,
-            name: e.name 
-          } 
+            name: e.name
+          }
         }, obj.callback);
       } finally {
         try {
           if (page && !page.isClosed()) {
-            await page.close();
+            // Close with timeout (5s max)
+            await Promise.race([
+              page.close(),
+              new Promise((resolve) => setTimeout(resolve, 5000))
+            ]);
+          }
+          if (customBrowser) {
+            // Close custom browser with timeout
+            await Promise.race([
+              customBrowser.close(),
+              new Promise((resolve) => setTimeout(resolve, 5000))
+            ]);
+            this.log.info("Custom browser closed");
           }
         } catch (closeError) {
-          this.log.warn(`Error closing page: ${closeError.message}`);
+          this.log.debug(`Error closing page/browser: ${closeError.message}`);
+          // Ignore close errors - not critical
+        }
+
+        // Additional wait after browser close to allow cleanup
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Clean up temp user data dir if it was created
+        if (tempUserDataDir) {
+          try {
+            const fs = require('fs');
+            const rimraf = require('rimraf');
+            if (fs.existsSync(tempUserDataDir)) {
+              this.log.debug(`Cleaning up temp profile: ${tempUserDataDir}`);
+              // Async cleanup - don't wait for it
+              rimraf(tempUserDataDir, (err) => {
+                if (err) {
+                  this.log.debug(`Could not clean temp profile: ${err.message}`);
+                }
+              });
+            }
+          } catch (cleanupErr) {
+            this.log.debug(`Profile cleanup error: ${cleanupErr.message}`);
+          }
         }
       }
-    } else if (obj.command === "pdf") {
+    }
+    else if (obj.command === "pdf") {
+      let url;
+      let options;
+      if (typeof obj.message === "string") {
+        url = obj.message;
+        options = {};
+      } else {
+        url = obj.message.url;
+        options = obj.message;
+        delete options.url;
+      }
+      const { waitMethod, waitParameter } = PuppeteerAdapter.extractWaitOptionFromMessage(options);
+      const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
+      const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
+      let customBrowser;
+      let tempUserDataDir;  // Declare here to be accessible in finally block
+     
+       /* if (options.path) {
+          this.validatePath(options.path);
+        }*/
+      const pdfOptions = {
+        ...options,
+        timeout: 10000,  // 10s → 30s for web components
+        preferCSSPageSize: false,
+        printBackground: options.printBackground !== false  // Default true
+      };
+      const browser = await import_puppeteer.launch();
+      const page = await browser.newPage();
+      var contentHtml = import_fs.readFileSync('E:\\iob_dubendi_afc\\DubendiAFC\\node_modules\\iobroker.puppeteer-enhanced\\operlogin.html', 'utf8');
+      await page.setContent(contentHtml);
+      //await page.goto('file://E:\iob_Stansiya479\iobStansiya479\iobroker-data\operlogin.html', {waitUntil: 'networkidle2'});
+      await page.waitForTimeout(10000);
+      await page.goto(url, { waitUntil: 'networkidle2' });
+      await page.waitForTimeout(10000);
+      const pdf = await page.pdf(pdfOptions);
+      await import_fs.promises.writeFile(options.path, pdf);  // ✅ Absolute path
+      this.sendTo(obj.from, obj.command, { result: pdf }, obj.callback);
+      //await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(pdf));
+      await browser.close();
+
+    }
+    /*else if (obj.command === "pdf") {
       let url;
       let options;
       if (typeof obj.message === "string") {
@@ -221,45 +412,132 @@ class PuppeteerAdapter extends utils.Adapter {
       const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
       const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
       let page;
+      let customBrowser;
+      let tempUserDataDir;  // Declare here to be accessible in finally block
       try {
         if (options.path) {
           this.validatePath(options.path);
         }
-        page = await this.browser.newPage();
         
-        // Navigate to URL with error handling
-        let navigationSuccessful = false;
-        try {
-          await page.goto(url, { 
-            waitUntil: "load",
-            timeout: 60000 
+        // If custom Chrome executable specified, launch separate browser instance
+        if (options.executablePath) {
+          this.log.info(`Using custom Chrome: ${options.executablePath}`);
+          
+          // Create persistent temp directory to avoid cleanup issues
+          const os = require('os');
+          const path = require('path');
+          tempUserDataDir = path.join(os.tmpdir(), `pup_chrome_${Date.now()}`);
+          
+          customBrowser = await import_puppeteer.default.launch({
+            headless: false,
+            executablePath: options.executablePath,
+            defaultViewport: null,
+            userDataDir: tempUserDataDir,  // Persistent profile to avoid EBUSY
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-logging'],
+            ignoreHTTPSErrors: true,
+            dumpio: false,  // Disable to prevent chrome_debug.log locks
+            protocolTimeout: 180000
           });
-          navigationSuccessful = true;
-          this.log.info('[PDF] Navigation successful');
-        } catch (navError) {
-          this.log.error(`[PDF] Navigation failed: ${navError.message}`);
-          this.log.error('[PDF] Cannot continue - page did not load');
-          throw new Error(`Navigation failed: ${navError.message}`);
+          page = await customBrowser.newPage();
+        } else {
+          page = await this.browser.newPage();
         }
         
-        // Wait a bit for frame to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait for page to be ready
+        await page.waitForTimeout(500);
         
-        // Debug: Log page URL and content
-        try {
-          const pageUrl = page.url();
-          const pageTitle = await page.title();
-          const bodyHTML = await page.evaluate(() => document.body.innerHTML.substring(0, 500));
-          this.log.info(`[PDF] Page loaded: URL=${pageUrl}, Title=${pageTitle}`);
-          this.log.debug(`[PDF] Body HTML preview: ${bodyHTML}`);
-        } catch (e) {
-          this.log.warn(`[PDF] Could not get page info: ${e.message}`);
+        // Check if loginHtmlPath is provided (2023 approach)
+        const loginHtmlPath = options.loginHtmlPath;
+        
+        if (loginHtmlPath && credentials && credentials.username && credentials.password) {
+          // 2023 approach: Load HTML file, then navigate to VIS
+          this.log.info(`Using HTML login file: ${loginHtmlPath}`);
+          
+          try {
+            const loginHtml = await import_fs.promises.readFile(loginHtmlPath, 'utf8');
+            await page.setContent(loginHtml);
+            this.log.info('Login HTML loaded');
+            
+            // Wait for login form to process (2023 API)
+            await page.waitForTimeout(5000);
+            
+            // Navigate to target URL
+            await page.goto(url, { 
+              waitUntil: "domcontentloaded",
+              timeout: 30000 
+            });
+            this.log.info('[PDF] Navigation successful after HTML login');
+            
+            // Wait for page to load completely (2023 API)
+            await page.waitForTimeout(10000);
+            
+          } catch (htmlError) {
+            this.log.warn(`HTML login failed: ${htmlError.message} - trying standard login`);
+            // Fallback to standard login approach
+            await page.goto(url, { 
+              waitUntil: "domcontentloaded",
+              timeout: 30000 
+            });
+          }
+        } else {
+          // Standard approach: Navigate to full URL (like 2023)
+          try {
+            await page.goto(url, {  // Full URL with hash (2023 style)
+              waitUntil: "networkidle2",  // Wait for network idle (web components support)
+              timeout: 30000
+            });
+            this.log.info('[PDF] Navigation successful');
+          } catch (navError) {
+            this.log.warn(`Navigation timeout: ${navError.message} - trying with domcontentloaded`);
+            await page.goto(url, { 
+              waitUntil: "domcontentloaded",
+              timeout: 30000 
+            });
+            this.log.info('[PDF] Navigation successful (fallback)');
+          }
         }
         
-        // Wait for VIS to be fully ready (handles login, loading, etc)
-        const visReady = await this.waitForVISReady(page, url, credentials, 45000);
-        if (!visReady) {
-          this.log.warn("VIS ready check timed out, attempting PDF export anyway...");
+        // Check for login and handle if needed (skip if HTML login was used)
+        if (!loginHtmlPath && credentials && credentials.username && credentials.password) {
+          let needsLogin = false;
+          try {
+            needsLogin = await page.evaluate(() => {
+              return document.querySelector('input[type="password"]') !== null;
+            });
+          } catch (evalErr) {
+            this.log.debug(`Could not check for login: ${evalErr.message}`);
+            needsLogin = false;
+          }
+          
+          if (needsLogin) {
+            this.log.info("Login page detected, attempting login...");
+            
+            try {
+              await this.handleIoBrokerLogin(page, url, credentials);
+              this.log.debug('Login function completed');
+            } catch (loginErr) {
+              this.log.warn(`Login failed: ${loginErr.message} - continuing anyway`);
+            }
+            
+            // Check if page still alive after login
+            if (page.isClosed()) {
+              throw new Error('Page closed during login process');
+            }
+            
+            // Wait for page to stabilize after login (2023 API: 10s → 5s)
+            this.log.debug('Waiting 5s for page stabilization...');
+            try {
+              await page.waitForTimeout(5000);
+            } catch (waitErr) {
+              this.log.warn(`Wait timeout error: ${waitErr.message}`);
+            }
+            
+            // Verify page is still alive
+            if (page.isClosed()) {
+              throw new Error('Page closed during post-login wait');
+            }
+            this.log.debug('Page still alive after login');
+          }
         }
         
         // Additional wait if specified
@@ -267,10 +545,50 @@ class PuppeteerAdapter extends utils.Adapter {
           await page[waitMethod](waitParameter);
         }
         
-        // Extra wait for dynamic content
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Wait for web components to fully render
+        this.log.debug('Waiting for web components to render...');
+        try {
+          await page.evaluate(() => {
+            return new Promise((resolve) => {
+              // Wait for custom elements to be ready
+              if (window.customElements) {
+                Promise.all([
+                  customElements.whenDefined('*') // Wait for all custom elements
+                ]).catch(() => {}).finally(() => resolve());
+              } else {
+                resolve();
+              }
+              // Fallback timeout
+              setTimeout(resolve, 3000);
+            });
+          });
+          this.log.debug('Web components ready');
+        } catch (e) {
+          this.log.debug(`Web component wait skipped: ${e.message}`);
+        }
         
-        const pdf = await page.pdf(options);
+        // Additional wait for web component rendering (dynamic content)
+        await page.waitForTimeout(3000);
+        this.log.debug('Final wait complete');
+        
+        // Check if page is still open
+        if (page.isClosed()) {
+          throw new Error('Page closed before PDF generation');
+        }
+        
+        // Add timeout to PDF generation (30s for web components)
+        const pdfOptions = {
+          ...options,
+          timeout: 10000,  // 10s → 30s for web components
+          preferCSSPageSize: false,
+          printBackground: options.printBackground !== false  // Default true
+        };
+        
+        this.log.info('Starting PDF generation (timeout: 30s)...');
+        const pdfStartTime = Date.now();
+        const pdf = await page.pdf(pdfOptions);
+        const pdfDuration = Date.now() - pdfStartTime;
+        this.log.info(`PDF generated successfully in ${pdfDuration}ms`);
         if (storagePath) {
           this.log.debug(`Write PDF file to "${storagePath}"`);
           await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(pdf));
@@ -289,13 +607,48 @@ class PuppeteerAdapter extends utils.Adapter {
       } finally {
         try {
           if (page && !page.isClosed()) {
-            await page.close();
+            // Close with timeout (5s max)
+            await Promise.race([
+              page.close(),
+              new Promise((resolve) => setTimeout(resolve, 5000))
+            ]);
+          }
+          if (customBrowser) {
+            // Close custom browser with timeout
+            await Promise.race([
+              customBrowser.close(),
+              new Promise((resolve) => setTimeout(resolve, 5000))
+            ]);
+            this.log.info("Custom browser closed");
           }
         } catch (closeError) {
-          this.log.warn(`Error closing page: ${closeError.message}`);
+          this.log.debug(`Error closing page/browser: ${closeError.message}`);
+          // Ignore close errors - not critical
+        }
+        
+        // Additional wait after browser close to allow cleanup
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Clean up temp user data dir if it was created
+        if (tempUserDataDir) {
+          try {
+            const fs = require('fs');
+            const rimraf = require('rimraf');
+            if (fs.existsSync(tempUserDataDir)) {
+              this.log.debug(`Cleaning up temp profile: ${tempUserDataDir}`);
+              // Async cleanup - don't wait for it
+              rimraf(tempUserDataDir, (err) => {
+                if (err) {
+                  this.log.debug(`Could not clean temp profile: ${err.message}`);
+                }
+              });
+            }
+          } catch (cleanupErr) {
+            this.log.debug(`Profile cleanup error: ${cleanupErr.message}`);
+          }
         }
       }
-    } else {
+    } */else {
       this.log.error(`Unsupported message command: ${obj.command}`);
       this.sendTo(
         obj.from,
@@ -388,170 +741,6 @@ class PuppeteerAdapter extends utils.Adapter {
     }
     return options;
   }
-  /**
-   * Wait for VIS page to be fully loaded (handles login, loading states)
-   *
-   * @param page active page object
-   * @param url the URL being accessed
-   * @param credentials optional credentials object with username and password
-   * @param maxWaitTime maximum time to wait in milliseconds
-   */
-  async waitForVISReady(page, url, credentials, maxWaitTime = 30000) {
-    const startTime = Date.now();
-    
-    this.log.debug("Waiting for VIS page to be ready...");
-    
-    // Extract hash/view from URL
-    const urlParts = url.split('#');
-    const targetView = urlParts[1];
-    if (targetView) {
-      this.log.info(`Target VIS view: ${targetView}`);
-    }
-    
-    // Loop until VIS is ready or timeout
-    while (Date.now() - startTime < maxWaitTime) {
-      try {
-        // Check if page is ready for evaluation
-        if (page.isClosed()) {
-          this.log.error("Page is closed, cannot check VIS state");
-          return false;
-        }
-        
-        // Wait a bit before checking
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Check for login page
-        const needsLogin = await page.evaluate(() => {
-          return document.querySelector('input[type="password"]') !== null;
-        }).catch(() => false);
-        
-        if (needsLogin && credentials && credentials.username && credentials.password) {
-          this.log.info("Login page detected, attempting login...");
-          await this.handleIoBrokerLogin(page, url, credentials);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        
-        // Check for "server connecting" or loading state
-        const isConnecting = await page.evaluate(() => {
-          const bodyText = document.body.innerText.toLowerCase();
-          return bodyText.includes('connecting') || 
-                 bodyText.includes('loading') ||
-                 bodyText.includes('verbinden');
-        }).catch(() => false);
-        
-        if (isConnecting) {
-          this.log.debug("VIS is connecting/loading, waiting...");
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          continue;
-        }
-        
-        // If specific view requested, try to navigate to it
-        if (targetView) {
-          try {
-            await page.evaluate((viewName) => {
-              // Try VIS changeView function if available
-              if (typeof vis !== 'undefined' && vis.changeView) {
-                vis.changeView(viewName);
-              }
-              // Also update hash
-              window.location.hash = viewName;
-            }, targetView);
-            this.log.debug(`Attempted to switch to view: ${targetView}`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          } catch (e) {
-            // Ignore errors, continue checking
-          }
-        }
-        
-        // Check if VIS view is loaded
-        const visReady = await page.evaluate((targetUrl) => {
-          // Extract view name from hash (e.g., #DailyReport)
-          const urlHash = targetUrl.split('#')[1];
-          
-          // Check for VIS-specific elements
-          const hasView = document.querySelector('.vis-view') !== null ||
-                         document.querySelector('[data-vis-contains]') !== null;
-          const hasWidgets = document.querySelectorAll('.vis-widget').length > 0;
-          const hasContent = document.body.innerText.trim().length > 100;
-          
-          // If URL has specific view hash, check if that view is active
-          if (urlHash) {
-            const activeView = document.querySelector('.vis-view.vis-view-active');
-            if (activeView) {
-              const viewId = activeView.getAttribute('data-vis-contains') || 
-                            activeView.id || 
-                            activeView.className || 
-                            '';
-              // Check if the active view matches the requested view
-              if (viewId) {
-                const isCorrectView = viewId.toLowerCase().includes(urlHash.toLowerCase());
-                return hasView && hasWidgets && hasContent && isCorrectView;
-              }
-            }
-            return false; // Specific view requested but not found
-          }
-          
-          // No specific view requested, just check general VIS readiness
-          return hasView && hasWidgets && hasContent;
-        }, url).catch((err) => {
-          this.log.debug(`Error evaluating VIS ready state: ${err.message}`);
-          return false;
-        });
-        
-        if (visReady) {
-          // Log which view is active
-          const activeViewInfo = await page.evaluate(() => {
-            const activeView = document.querySelector('.vis-view.vis-view-active');
-            if (activeView) {
-              return activeView.getAttribute('data-vis-contains') || activeView.id || 'unknown';
-            }
-            return 'no active view';
-          }).catch(() => 'unknown');
-          this.log.info(`VIS page is ready! Active view: ${activeViewInfo}`);
-          
-          // Extra wait for widgets to fully render
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          this.log.debug("Extra wait completed, VIS should be fully rendered");
-          return true;
-        }
-        
-        // Debug: log current state every 5 seconds
-        if ((Date.now() - startTime) % 5000 < 500) {
-          const currentState = await page.evaluate(() => {
-            const activeView = document.querySelector('.vis-view.vis-view-active');
-            const viewName = activeView ? (activeView.getAttribute('data-vis-contains') || activeView.id) : 'none';
-            const widgetCount = document.querySelectorAll('.vis-widget').length;
-            return `View: ${viewName}, Widgets: ${widgetCount}`;
-          }).catch(() => 'State unavailable');
-          this.log.debug(`Current VIS state: ${currentState}`);
-        }
-        
-        // Wait a bit before next check
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-      } catch (e) {
-        this.log.warn(`Error checking VIS state: ${e.message}`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    // Timeout reached, log final state
-    try {
-      const finalState = await page.evaluate(() => {
-        const activeView = document.querySelector('.vis-view.vis-view-active');
-        const viewName = activeView ? (activeView.getAttribute('data-vis-contains') || activeView.id) : 'none';
-        const widgetCount = document.querySelectorAll('.vis-widget').length;
-        const hasContent = document.body.innerText.trim().length;
-        return `View: ${viewName}, Widgets: ${widgetCount}, Content length: ${hasContent}`;
-      });
-      this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms. Final state: ${finalState}`);
-    } catch (e) {
-      this.log.warn(`VIS ready check timed out after ${maxWaitTime}ms`);
-    }
-    return false;
-  }
-  
   /**
    * Handles ioBroker web login if login page is detected
    *
@@ -716,7 +905,7 @@ class PuppeteerAdapter extends utils.Adapter {
     if (path.includes(`${import_path.sep}node_modules${import_path.sep}`)) {
       throw new Error("Screenshots cannot be stored inside a node_modules folder");
     }
-    
+
     // Create directory if it doesn't exist
     const directory = (0, import_path.dirname)(path);
     if (!import_fs.existsSync(directory)) {
