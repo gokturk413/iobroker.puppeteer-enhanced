@@ -66,7 +66,8 @@ sendTo('puppeteer.0', 'pdf', {
     printBackground: true
 });
 ```
-####
+#### ----------------Main worked-----------------------------------------------------
+```javascript
 sendTo('puppeteer-enhanced.0', 'pdf', {
     loginaddressurl: "http://127.0.0.1:8082/login/",
     url: 'http://127.0.0.1:8082/webui/runtime.html#screenName=test7',
@@ -123,7 +124,7 @@ sendTo('puppeteer-enhanced.0', 'pdf', {
         log('  Tarix: ' + result.timestamp, 'info');
     }
 });
-
+```
 ### ioBroker VIS-dən PDF export (login ilə)
 ```javascript
 sendTo('puppeteer.0', 'pdf', {
