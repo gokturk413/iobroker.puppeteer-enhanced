@@ -189,6 +189,12 @@ sendTo('puppeteer-enhanced.0', 'pdf', {
     loginCredentials: { username: 'admin', password: 'pass' },
     format: 'A4',
     timeout: 30000  // Optional: 30s timeout (default: 30s)
+}, (result) => {
+    if (result.error || !result.success) {
+        log('ERROR: ' + result.error.message, 'error');
+    } else {
+        log('✓ PDF: ' + result.size + ' bytes → ' + result.path, 'info');
+    }
 });
 ```
 
@@ -202,6 +208,10 @@ sendTo('puppeteer-enhanced.0', 'pdf', {
     url: 'http://127.0.0.1:8082/webui/runtime.html',
     path: 'D:/reports/2026/02/daily.pdf',  // Auto-creates directory
     format: 'A4'
+}, (result) => {
+    if (result.success) {
+        log(`✓ PDF saved: ${result.size} bytes`, 'info');
+    }
 });
 
 // ioBroker storage (relative)
@@ -210,6 +220,51 @@ sendTo('puppeteer-enhanced.0', 'pdf', {
     format: 'A4',
     ioBrokerOptions: {
         storagePath: 'reports/daily.pdf'  // Stored in 0_userdata.0
+    }
+}, (result) => {
+    if (result.success) {
+        log(`✓ PDF: ${result.size} bytes → 0_userdata.0/${result.path}`, 'info');
+    } else {
+        log(`✗ Error: ${result.error.message}`, 'error');
+    }
+});
+```
+
+## Callback Response Strukturu
+
+**Success:**
+```javascript
+{
+    success: true,
+    result: <Buffer>,  // PDF buffer (faylda saxlanılıb)
+    size: 45678,       // PDF ölçüsü (bytes)
+    path: 'D:/reports/daily.pdf'  // Fayl path-i
+}
+```
+
+**Error:**
+```javascript
+{
+    success: false,
+    error: {
+        message: 'Error message',
+        stack: '...'
+    }
+}
+```
+
+**Script callback nümunəsi:**
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'http://127.0.0.1:8082/webui/runtime.html#screenName=test7',
+    path: 'D:/reports/daily.pdf',
+    loginCredentials: { username: 'oper1', password: 'Operator1' },
+    format: 'A4'
+}, (result) => {
+    if (result.error || !result.success) {
+        log('✗ PDF ERROR: ' + result.error.message, 'error');
+    } else {
+        log(`✓ PDF OK: ${result.size} bytes → ${result.path}`, 'info');
     }
 });
 ```
@@ -221,9 +276,30 @@ Adapter avtomatik olaraq PDF generation üçün:
 - ✅ **Web Components dəstəyi** (ioBroker.webui, custom elements)
 - ✅ networkidle2 navigation (dynamic content üçün)
 - ✅ Custom elements wait (web component rendering)
-- ✅ **30s PDF generation timeout** (web components üçün)
+- ✅ **60s navigation timeout** (web components üçün)
+- ✅ **30s PDF generation timeout**
 - ✅ preferCSSPageSize optimization
 - ✅ Post-login wait optimization (5s)
+- ✅ **Callback response** (success/error status)
+- ✅ **Browser cleanup** (memory leak prevention)
+- ✅ **EventEmitter optimization** (max listeners: 30)
+
+**Memory & Performance:**
+- Browser instance-lar avtomatik close olunur (həm success, həm error halında)
+- Page və Browser düzgün cleanup edilir (memory leak yoxdur)
+- **Browser cleanup**: `browser.close()` istifadəsi (process-i kill edir)
+- **Pipe mode**: `pipe: true` - WebSocket əvəzinə pipe istifadəsi (az socket connection)
+- **Global EventEmitter.defaultMaxListeners**: 50 (bütün EventEmitter-lər üçün)
+- **Process event listeners**: 50 (SIGINT, SIGTERM, exit üçün kifayətdir)
+- **Browser process listeners**: 50
+- **Browser connection listeners**: 50 (WebSocket, pipe streams)
+- **Page connection listeners**: 50 (WebSocket, pipe streams)
+- **Active browser tracking**: Bütün açıq browser instance-ları track edilir
+- **Shutdown cleanup**: Adapter bağlananda (restart/suspend) bütün browser-lər avtomatik bağlanır
+- **Graceful shutdown**: 10s timeout ilə bütün browser-lər düzgün close olunur
+
+⚠️ **Signal Listener Warning:**
+Hər PDF request yeni browser launch edir və Node.js process signal listeners (SIGINT, SIGTERM) əlavə olur. 50+ paralel request olduqda warning görsənə bilər. Bu normal haldır və təhlükəli deyil. Production-da adətən 5-10 paralel request olur.
 
 **Web Component Support:**
 Adapter indi bu texnologiyalardan istifadə edən səhifələri dəstəkləyir:
@@ -231,6 +307,37 @@ Adapter indi bu texnologiyalardan istifadə edən səhifələri dəstəkləyir:
 - Custom elements / Shadow DOM
 - Dynamic JavaScript rendered content
 - Lazy-loaded components
+
+## Troubleshooting - Memory Leak Warnings
+
+**Problem:**
+```
+MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 31 SIGINT listeners added to [process]
+MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 31 SIGTERM listeners added to [process]
+```
+
+**Səbəb:**
+Hər PDF request-də yeni browser launch olunur və browser process signal handlers (SIGINT, SIGTERM, exit, SIGHUP) əlavə olunur. Browser close() ediləndə bu listeners Node.js process-də qalır.
+
+**Həll:**
+✅ `browser.close()` istifadəsi (`disconnect()` əvəzinə) - process-i tamamilə öldürür
+✅ Global `EventEmitter.defaultMaxListeners = 50` - çoxlu paralel request üçün
+✅ Process max listeners: 50
+✅ Browser pipe mode: `pipe: true` (WebSocket-dən az connection)
+✅ Proper browser cleanup (həm success, həm error)
+
+**İdeal Həll (gələcək versiyalarda):**
+Shared browser instance istifadə etmək (screenshot kimi). Hər request üçün yalnız yeni page açmaq, browser-i reuse etmək.
+
+**Debug Modunda:**
+VS Code, Windsurf və ya development environment-də debug mode daha çox signal listener yaradır. Production-da az problem olur.
+
+**Əgər hələ də warnings gəlirsə:**
+1. Adapter restart: `iobroker restart puppeteer-enhanced.0`
+2. Paralel PDF request sayını azaldın (max 5-10 eyni anda)
+3. PDF request-lər arasında 1-2s interval verin
+
+---
 
 **Performance Timeline (Web Components):**
 ```

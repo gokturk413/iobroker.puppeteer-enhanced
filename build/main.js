@@ -27,6 +27,15 @@ var import_tools = require("./lib/tools");
 var import_path = require("path");
 var import_fs = require("fs");
 
+// Set global EventEmitter max listeners to avoid warnings
+const EventEmitter = require('events');
+EventEmitter.defaultMaxListeners = 30;
+
+// Also set process max listeners
+if (process.setMaxListeners) {
+  process.setMaxListeners(30);
+}
+
 class PuppeteerAdapter extends utils.Adapter {
   constructor(options = {}) {
     super({ ...options, name: "puppeteer-enhanced" });
@@ -34,6 +43,9 @@ class PuppeteerAdapter extends utils.Adapter {
     this.on("stateChange", this.onStateChange.bind(this));
     this.on("unload", this.onUnload.bind(this));
     this.on("message", this.onMessage.bind(this));
+    
+    // Track active PDF browser instances
+    this.activePdfBrowsers = new Set();
   }
   /**
    * Is called when databases are connected and adapter received configuration.
@@ -87,8 +99,36 @@ class PuppeteerAdapter extends utils.Adapter {
    */
   async onUnload(callback) {
     try {
+      // Close all active PDF browsers first
+      if (this.activePdfBrowsers && this.activePdfBrowsers.size > 0) {
+        this.log.warn(`Closing ${this.activePdfBrowsers.size} active PDF browser(s)...`);
+        
+        const closePromises = [];
+        for (const browser of this.activePdfBrowsers) {
+          const closePromise = (async () => {
+            try {
+              await browser.close();
+              this.log.debug('PDF browser closed during shutdown');
+            } catch (err) {
+              this.log.debug(`PDF browser close error: ${err.message}`);
+            }
+          })();
+          closePromises.push(closePromise);
+        }
+        
+        // Wait for all browsers to close (max 10s)
+        await Promise.race([
+          Promise.all(closePromises),
+          new Promise((resolve) => setTimeout(resolve, 10000))
+        ]);
+        
+        this.activePdfBrowsers.clear();
+        this.log.info('All PDF browsers closed');
+      }
+      
+      // Close main screenshot browser
       if (this.browser) {
-        this.log.info("Closing browser");
+        this.log.info("Closing main browser");
         await Promise.race([
           this.browser.close(),
           new Promise((resolve) => setTimeout(resolve, 5000))
@@ -97,6 +137,8 @@ class PuppeteerAdapter extends utils.Adapter {
         // Wait for cleanup
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
+      
+      this.log.info('Adapter unloaded successfully');
       callback();
     } catch (e) {
       this.log.debug(`Error during unload: ${e.message}`);
@@ -357,12 +399,17 @@ class PuppeteerAdapter extends utils.Adapter {
       }
     }
     else if (obj.command === "pdf") {
+      this.log.info(`[PDF] Command received from ${obj.from}`);
+      this.log.debug(`[PDF] Has callback: ${!!obj.callback}`);
+      
       let url;
       let options;
+      let loginaddress_url;
       if (typeof obj.message === "string") {
         url = obj.message;
         options = {};
       } else {
+        loginaddress_url = obj.message.loginaddressurl;
         url = obj.message.url;
         options = obj.message;
         delete options.url;
@@ -370,85 +417,118 @@ class PuppeteerAdapter extends utils.Adapter {
       const { waitMethod, waitParameter } = PuppeteerAdapter.extractWaitOptionFromMessage(options);
       const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
       const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
-      let customBrowser;
-      let tempUserDataDir;  // Declare here to be accessible in finally block
-     
-       /* if (options.path) {
-          this.validatePath(options.path);
-        }*/
-      const pdfOptions = {
-        ...options,
-        timeout: 10000,  // 10s → 30s for web components
-        preferCSSPageSize: false,
-        printBackground: options.printBackground !== false  // Default true
-      };
-      const browser = await import_puppeteer.launch();
-      const page = await browser.newPage();
-      var contentHtml = import_fs.readFileSync('E:\\iob_dubendi_afc\\DubendiAFC\\node_modules\\iobroker.puppeteer-enhanced\\operlogin.html', 'utf8');
-      await page.setContent(contentHtml);
-      //await page.goto('file://E:\iob_Stansiya479\iobStansiya479\iobroker-data\operlogin.html', {waitUntil: 'networkidle2'});
-      await page.waitForTimeout(10000);
-      await page.goto(url, { waitUntil: 'networkidle2' });
-      await page.waitForTimeout(10000);
-      const pdf = await page.pdf(pdfOptions);
-      await import_fs.promises.writeFile(options.path, pdf);  // ✅ Absolute path
-      this.sendTo(obj.from, obj.command, { result: pdf }, obj.callback);
-      //await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(pdf));
-      await browser.close();
-
-    }
-    /*else if (obj.command === "pdf") {
-      let url;
-      let options;
-      if (typeof obj.message === "string") {
-        url = obj.message;
-        options = {};
-      } else {
-        url = obj.message.url;
-        options = obj.message;
-        delete options.url;
-      }
-      const { waitMethod, waitParameter } = PuppeteerAdapter.extractWaitOptionFromMessage(options);
-      const { storagePath } = PuppeteerAdapter.extractIoBrokerOptionsFromMessage(options);
-      const { credentials } = PuppeteerAdapter.extractLoginCredentials(options);
+      let browser;  // Declare here for error handling
       let page;
-      let customBrowser;
-      let tempUserDataDir;  // Declare here to be accessible in finally block
+     
       try {
+        // Create directory if path specified
         if (options.path) {
-          this.validatePath(options.path);
+          const directory = (0, import_path.dirname)(options.path);
+          if (!import_fs.existsSync(directory)) {
+            this.log.info(`[PDF] Creating directory: ${directory}`);
+            import_fs.mkdirSync(directory, { recursive: true });
+            this.log.debug(`[PDF] Directory created successfully`);
+          }
         }
         
-        // If custom Chrome executable specified, launch separate browser instance
-        if (options.executablePath) {
-          this.log.info(`Using custom Chrome: ${options.executablePath}`);
-          
-          // Create persistent temp directory to avoid cleanup issues
-          const os = require('os');
-          const path = require('path');
-          tempUserDataDir = path.join(os.tmpdir(), `pup_chrome_${Date.now()}`);
-          
-          customBrowser = await import_puppeteer.default.launch({
-            headless: false,
-            executablePath: options.executablePath,
-            defaultViewport: null,
-            userDataDir: tempUserDataDir,  // Persistent profile to avoid EBUSY
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-logging'],
-            ignoreHTTPSErrors: true,
-            dumpio: false,  // Disable to prevent chrome_debug.log locks
-            protocolTimeout: 180000
-          });
-          page = await customBrowser.newPage();
-        } else {
-          page = await this.browser.newPage();
-        }
+        const pdfOptions = {
+          ...options,
+          timeout: 30000,  // 30s for web components
+          preferCSSPageSize: false,
+          printBackground: options.printBackground !== false  // Default true
+        };
         
-        // Wait for page to be ready
-        await page.waitForTimeout(500);
+        // Remove path from pdfOptions - we'll write manually
+        delete pdfOptions.path;
         
-        // Check if loginHtmlPath is provided (2023 approach)
         const loginHtmlPath = options.loginHtmlPath;
         
+        this.log.info('[PDF] Launching browser...');
+        browser = await import_puppeteer.launch({
+          headless: true,
+          args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+          ],
+          // Use pipe instead of WebSocket to reduce socket connections
+          pipe: true,
+          // Ignore HTTPS errors for internal addresses
+          ignoreHTTPSErrors: true
+        });
+        
+        // Track this browser instance
+        this.activePdfBrowsers.add(browser);
+        this.log.debug(`[PDF] Browser tracked (total active: ${this.activePdfBrowsers.size})`);
+        
+        // Set max listeners to avoid warnings
+        if (browser.process()) {
+          browser.process().setMaxListeners(30);
+          this.log.debug('[PDF] Browser process max listeners set to 30');
+        }
+        
+        // Set max listeners on browser connection
+        const connection = browser._connection;
+        if (connection) {
+          if (connection.setMaxListeners) {
+            connection.setMaxListeners(30);
+          }
+          
+          // Handle both pipe and WebSocket transports
+          if (connection._transport) {
+            const transport = connection._transport;
+            
+            // For WebSocket transport
+            if (transport._ws && transport._ws.setMaxListeners) {
+              transport._ws.setMaxListeners(30);
+              this.log.debug('[PDF] Browser WebSocket max listeners set to 30');
+            }
+            
+            // For pipe transport (streams)
+            if (transport._pipeWrite && transport._pipeWrite.setMaxListeners) {
+              transport._pipeWrite.setMaxListeners(30);
+              this.log.debug('[PDF] Browser pipe write stream max listeners set to 30');
+            }
+            if (transport._pipeRead && transport._pipeRead.setMaxListeners) {
+              transport._pipeRead.setMaxListeners(30);
+              this.log.debug('[PDF] Browser pipe read stream max listeners set to 30');
+            }
+          }
+        }
+        
+        this.log.debug('[PDF] Browser launched, creating new page...');
+        page = await browser.newPage();
+        
+        // Set max listeners on page's internal connections
+        if (page._client && page._client._connection) {
+          const pageConnection = page._client._connection;
+          
+          if (pageConnection.setMaxListeners) {
+            pageConnection.setMaxListeners(30);
+          }
+          
+          if (pageConnection._transport) {
+            const pageTransport = pageConnection._transport;
+            
+            // For WebSocket
+            if (pageTransport._ws && pageTransport._ws.setMaxListeners) {
+              pageTransport._ws.setMaxListeners(30);
+              this.log.debug('[PDF] Page WebSocket max listeners set to 30');
+            }
+            
+            // For pipe transport (streams)
+            if (pageTransport._pipeWrite && pageTransport._pipeWrite.setMaxListeners) {
+              pageTransport._pipeWrite.setMaxListeners(30);
+              this.log.debug('[PDF] Page pipe write stream max listeners set to 30');
+            }
+            if (pageTransport._pipeRead && pageTransport._pipeRead.setMaxListeners) {
+              pageTransport._pipeRead.setMaxListeners(30);
+              this.log.debug('[PDF] Page pipe read stream max listeners set to 30');
+            }
+          }
+        }
+
         if (loginHtmlPath && credentials && credentials.username && credentials.password) {
           // 2023 approach: Load HTML file, then navigate to VIS
           this.log.info(`Using HTML login file: ${loginHtmlPath}`);
@@ -461,194 +541,188 @@ class PuppeteerAdapter extends utils.Adapter {
             // Wait for login form to process (2023 API)
             await page.waitForTimeout(5000);
             
-            // Navigate to target URL
-            await page.goto(url, { 
-              waitUntil: "domcontentloaded",
-              timeout: 30000 
-            });
-            this.log.info('[PDF] Navigation successful after HTML login');
-            
-            // Wait for page to load completely (2023 API)
-            await page.waitForTimeout(10000);
-            
           } catch (htmlError) {
             this.log.warn(`HTML login failed: ${htmlError.message} - trying standard login`);
-            // Fallback to standard login approach
-            await page.goto(url, { 
-              waitUntil: "domcontentloaded",
-              timeout: 30000 
-            });
           }
-        } else {
-          // Standard approach: Navigate to full URL (like 2023)
-          try {
-            await page.goto(url, {  // Full URL with hash (2023 style)
-              waitUntil: "networkidle2",  // Wait for network idle (web components support)
-              timeout: 30000
-            });
-            this.log.info('[PDF] Navigation successful');
-          } catch (navError) {
-            this.log.warn(`Navigation timeout: ${navError.message} - trying with domcontentloaded`);
-            await page.goto(url, { 
-              waitUntil: "domcontentloaded",
-              timeout: 30000 
-            });
-            this.log.info('[PDF] Navigation successful (fallback)');
-          }
-        }
+        } 
         
         // Check for login and handle if needed (skip if HTML login was used)
         if (!loginHtmlPath && credentials && credentials.username && credentials.password) {
-          let needsLogin = false;
-          try {
-            needsLogin = await page.evaluate(() => {
-              return document.querySelector('input[type="password"]') !== null;
-            });
-          } catch (evalErr) {
-            this.log.debug(`Could not check for login: ${evalErr.message}`);
-            needsLogin = false;
-          }
           
-          if (needsLogin) {
             this.log.info("Login page detected, attempting login...");
             
             try {
-              await this.handleIoBrokerLogin(page, url, credentials);
+              //await this.handleIoBrokerLogin(page, url, credentials);
+              var contentHtml = `<!DOCTYPE html>
+              <html>
+              <head>
+              <title>Page Title</title>
+              </head>
+              <body>
+              <script>
+              
+              var mapForm = document.createElement("form");
+              mapForm.target = "_self";    
+              mapForm.method = "POST";
+              mapForm.action = "${loginaddress_url}";
+              
+              // Create an input
+              var params = {"username":"${credentials.username}","password":"${credentials.password}"}
+              
+              for(var key in params) {
+                      var mapInput = document.createElement("input");
+                      mapInput.setAttribute("type", "hidden");
+                      mapInput.setAttribute("name", key);
+                      mapInput.setAttribute("value", params[key]);
+              
+                      // Add the input to the form
+                      mapForm.appendChild(mapInput);
+                  }
+              
+              
+              
+              
+              
+              
+              // Add the form to dom
+              document.body.appendChild(mapForm);
+              
+              // Just submit
+              mapForm.submit();
+              </script>
+              <h1>This is a Heading</h1>
+              <p>This is a paragraph.</p>
+              
+              </body>
+              </html>`
+              await page.setContent(contentHtml);
               this.log.debug('Login function completed');
             } catch (loginErr) {
               this.log.warn(`Login failed: ${loginErr.message} - continuing anyway`);
-            }
-            
-            // Check if page still alive after login
-            if (page.isClosed()) {
-              throw new Error('Page closed during login process');
-            }
-            
-            // Wait for page to stabilize after login (2023 API: 10s → 5s)
-            this.log.debug('Waiting 5s for page stabilization...');
-            try {
-              await page.waitForTimeout(5000);
-            } catch (waitErr) {
-              this.log.warn(`Wait timeout error: ${waitErr.message}`);
-            }
-            
-            // Verify page is still alive
-            if (page.isClosed()) {
-              throw new Error('Page closed during post-login wait');
-            }
-            this.log.debug('Page still alive after login');
-          }
+            }       
+          
         }
-        
-        // Additional wait if specified
-        if (waitMethod && waitMethod in page) {
-          await page[waitMethod](waitParameter);
-        }
-        
-        // Wait for web components to fully render
-        this.log.debug('Waiting for web components to render...');
-        try {
-          await page.evaluate(() => {
-            return new Promise((resolve) => {
-              // Wait for custom elements to be ready
-              if (window.customElements) {
-                Promise.all([
-                  customElements.whenDefined('*') // Wait for all custom elements
-                ]).catch(() => {}).finally(() => resolve());
-              } else {
-                resolve();
-              }
-              // Fallback timeout
-              setTimeout(resolve, 3000);
-            });
-          });
-          this.log.debug('Web components ready');
-        } catch (e) {
-          this.log.debug(`Web component wait skipped: ${e.message}`);
-        }
-        
-        // Additional wait for web component rendering (dynamic content)
-        await page.waitForTimeout(3000);
-        this.log.debug('Final wait complete');
-        
-        // Check if page is still open
-        if (page.isClosed()) {
-          throw new Error('Page closed before PDF generation');
-        }
-        
-        // Add timeout to PDF generation (30s for web components)
-        const pdfOptions = {
-          ...options,
-          timeout: 10000,  // 10s → 30s for web components
-          preferCSSPageSize: false,
-          printBackground: options.printBackground !== false  // Default true
-        };
-        
-        this.log.info('Starting PDF generation (timeout: 30s)...');
-        const pdfStartTime = Date.now();
+      
+      //var contentHtml = import_fs.readFileSync('E:\\iob_dubendi_afc\\DubendiAFC\\node_modules\\iobroker.puppeteer-enhanced\\operlogin.html', 'utf8');
+      //await page.setContent(contentHtml);
+      //await page.goto('file://E:\iob_Stansiya479\iobStansiya479\iobroker-data\operlogin.html', {waitUntil: 'networkidle2'});
+        await page.waitForTimeout(10000);
+        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.waitForTimeout(10000);
         const pdf = await page.pdf(pdfOptions);
-        const pdfDuration = Date.now() - pdfStartTime;
-        this.log.info(`PDF generated successfully in ${pdfDuration}ms`);
-        if (storagePath) {
-          this.log.debug(`Write PDF file to "${storagePath}"`);
+        
+        // Write PDF to file
+        if (options.path) {
+          this.log.info(`[PDF] Writing to file system: "${options.path}"`);
+          await import_fs.promises.writeFile(options.path, pdf);
+        } else if (storagePath) {
+          this.log.info(`[PDF] Writing to ioBroker storage: "${storagePath}"`);
           await this.writeFileAsync("0_userdata.0", storagePath, Buffer.from(pdf));
         }
-        this.sendTo(obj.from, obj.command, { result: pdf }, obj.callback);
+        
+        // Close page first
+        if (page && !page.isClosed()) {
+          this.log.debug('[PDF] Closing page...');
+          try {
+            await page.close();
+            this.log.debug('[PDF] Page closed');
+          } catch (pageErr) {
+            this.log.debug(`[PDF] Page close error (ignored): ${pageErr.message}`);
+          }
+        }
+        
+        // Then close browser and cleanup connections
+        if (browser) {
+          this.log.debug('[PDF] Closing browser...');
+          try {
+            // Close browser properly to cleanup all listeners
+            await browser.close();
+            
+            // Remove from tracked browsers
+            this.activePdfBrowsers.delete(browser);
+            this.log.debug(`[PDF] Browser removed from tracking (remaining: ${this.activePdfBrowsers.size})`);
+            this.log.debug('[PDF] Browser closed successfully');
+          } catch (browserErr) {
+            this.log.debug(`[PDF] Browser close error (ignored): ${browserErr.message}`);
+          }
+        }
+        
+        this.log.info(`[PDF] ✓ Export completed successfully! PDF size: ${pdf.length} bytes`);
+        
+        // Build success response
+        const response = {
+          success: true,
+          result: pdf,
+          size: pdf.length,
+          path: options.path || storagePath,
+          timestamp: new Date().toISOString()
+        };
+        
+        this.log.info(`[PDF] Sending success callback - Size: ${pdf.length} bytes, Path: ${response.path}`);
+        
+        if (obj.callback) {
+          this.sendTo(obj.from, obj.command, response, obj.callback);
+        } else {
+          this.sendTo(obj.from, obj.command, response);
+        }
+        
       } catch (e) {
-        this.log.error(`Could not export PDF of "${url}": ${e.message}`);
-        this.log.error(`Error stack: ${e.stack}`);
-        this.sendTo(obj.from, obj.command, { 
-          error: { 
-            message: e.message, 
-            stack: e.stack,
-            name: e.name 
-          } 
-        }, obj.callback);
-      } finally {
+        this.log.error(`[PDF] ❌ Export failed: ${e.message}`);
+        this.log.error(`[PDF] Error type: ${e.name}`);
+        this.log.error(`[PDF] Error stack: ${e.stack}`);
+        
+        // Cleanup after error
         try {
           if (page && !page.isClosed()) {
-            // Close with timeout (5s max)
-            await Promise.race([
-              page.close(),
-              new Promise((resolve) => setTimeout(resolve, 5000))
-            ]);
+            this.log.debug('[PDF] Closing page after error...');
+            await page.close();
+            this.log.debug('[PDF] Page closed after error');
           }
-          if (customBrowser) {
-            // Close custom browser with timeout
-            await Promise.race([
-              customBrowser.close(),
-              new Promise((resolve) => setTimeout(resolve, 5000))
-            ]);
-            this.log.info("Custom browser closed");
-          }
-        } catch (closeError) {
-          this.log.debug(`Error closing page/browser: ${closeError.message}`);
-          // Ignore close errors - not critical
+        } catch (pageCloseErr) {
+          this.log.debug(`[PDF] Page close error (ignored): ${pageCloseErr.message}`);
         }
         
-        // Additional wait after browser close to allow cleanup
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Clean up temp user data dir if it was created
-        if (tempUserDataDir) {
-          try {
-            const fs = require('fs');
-            const rimraf = require('rimraf');
-            if (fs.existsSync(tempUserDataDir)) {
-              this.log.debug(`Cleaning up temp profile: ${tempUserDataDir}`);
-              // Async cleanup - don't wait for it
-              rimraf(tempUserDataDir, (err) => {
-                if (err) {
-                  this.log.debug(`Could not clean temp profile: ${err.message}`);
-                }
-              });
-            }
-          } catch (cleanupErr) {
-            this.log.debug(`Profile cleanup error: ${cleanupErr.message}`);
+        try {
+          if (browser) {
+            this.log.debug('[PDF] Closing browser after error...');
+            
+            // Close browser properly to cleanup all listeners
+            await browser.close();
+            
+            // Remove from tracked browsers
+            this.activePdfBrowsers.delete(browser);
+            this.log.debug(`[PDF] Browser removed from tracking after error (remaining: ${this.activePdfBrowsers.size})`);
+            this.log.debug('[PDF] Browser closed after error');
           }
+        } catch (browserCloseErr) {
+          this.log.debug(`[PDF] Browser close error (ignored): ${browserCloseErr.message}`);
+        }
+        
+        const errorResponse = {
+          success: false,
+          error: e.message || e.toString() || 'Unknown error',
+          errorType: e.name || 'Error',
+          errorDetails: {
+            message: e.message,
+            stack: e.stack,
+            name: e.name,
+            toString: e.toString()
+          }
+        };
+        
+        this.log.error(`[PDF] Sending error callback - Error: "${errorResponse.error}"`);
+        this.log.debug(`[PDF] Full error response: ${JSON.stringify(errorResponse)}`);
+        
+        if (obj.callback) {
+          this.log.debug(`[PDF] Calling sendTo with error callback`);
+          this.sendTo(obj.from, obj.command, errorResponse, obj.callback);
+        } else {
+          this.log.warn(`[PDF] No callback provided - sending error without callback`);
+          this.sendTo(obj.from, obj.command, errorResponse);
         }
       }
-    } */else {
+
+    } else {
       this.log.error(`Unsupported message command: ${obj.command}`);
       this.sendTo(
         obj.from,
