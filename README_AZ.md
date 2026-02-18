@@ -66,6 +66,63 @@ sendTo('puppeteer.0', 'pdf', {
     printBackground: true
 });
 ```
+####
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    loginaddressurl: "http://127.0.0.1:8082/login/",
+    url: 'http://127.0.0.1:8082/webui/runtime.html#screenName=test7',
+    path: filename,
+    loginCredentials: {
+        username: 'oper1',
+        password: 'Operator1'
+    },
+    format: 'A4',
+    printBackground: true
+}, (result) => {
+    // Full debug log
+    log('[PDF] Callback received: ' + JSON.stringify(result), 'debug');
+    
+    // Check if result exists
+    if (!result) {
+        log('✗ PDF ERROR: No result received', 'error');
+        return;
+    }
+    
+    // Check for error
+    if (result.error) {
+        log('✗ PDF ERROR: ' + result.error, 'error');
+        
+        if (result.errorType) {
+            log('  Error Type: ' + result.errorType, 'error');
+        }
+        
+        if (result.errorDetails && result.errorDetails.message) {
+            log('  Details: ' + result.errorDetails.message, 'error');
+        }
+        
+        // Special handling for timeout errors
+        if (result.error.includes('timeout') || result.error.includes('Timeout')) {
+            log('  → TIMEOUT: Səhifə yüklənməsi çox uzun çəkdi', 'warn');
+            log('  → HƏLL: Timeout artırılıb (60s), yenidən cəhd edin', 'warn');
+        }
+        
+        return;
+    }
+    
+    // Check success flag
+    if (!result.success) {
+        log('✗ PDF FAILED: Success=false', 'error');
+        return;
+    }
+    
+    // Success
+    log('✓ PDF Uğurla Yaradıldı!', 'info');
+    log('  Ölçü: ' + result.size + ' bytes (' + Math.round(result.size/1024) + ' KB)', 'info');
+    log('  Fayl: ' + result.path, 'info');
+    
+    if (result.timestamp) {
+        log('  Tarix: ' + result.timestamp, 'info');
+    }
+});
 
 ### ioBroker VIS-dən PDF export (login ilə)
 ```javascript
