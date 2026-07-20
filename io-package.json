@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "puppeteer-enhanced",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "news": {
+      "0.5.1": {
+        "en": "Updated repository checker requirements, dependencies, Node.js 22 support, and admin i18n translations",
+        "de": "Repository-Checker-Anforderungen, Abhängigkeiten, Node.js 22-Unterstützung und Admin-i18n-Übersetzungen aktualisiert",
+        "ru": "Обновлены требования проверки репозитория, зависимости, поддержка Node.js 22 и переводы admin i18n",
+        "pt": "Requisitos do verificador de repositório atualizados, dependências, suporte Node.js 22 e traduções i18n admin",
+        "nl": "Repository checker vereisten, afhankelijkheden, Node.js 22 ondersteuning en admin i18n vertalingen bijgewerkt",
+        "fr": "Exigences du vérificateur de référentiel, dépendances, prise en charge de Node.js 22 et traductions admin i18n mises à jour",
+        "it": "Requisiti del verificatore di repository, dipendenze, supporto Node.js 22 e traduzioni admin i18n aggiornati",
+        "es": "Requisitos del comprobador de repositorio actualizados, dependencias, soporte para Node.js 22 y traducciones i18n admin",
+        "pl": "Zaktualizowano wymagania sprawdzania repozytorium, zależności, obsługę Node.js 22 i tłumaczenia admin i18n",
+        "uk": "Оновлено вимоги перевірки репозиторію, залежності, підтримку Node.js 22 та переклади admin i18n",
+        "zh-cn": "更新了存储库检查器要求、依赖项、Node.js 22 支持和 admin i18n 翻译"
+      },
       "0.5.0": {
         "en": "Added PDF export functionality\nAdded automatic ioBroker web login detection and authentication\nAdded login credentials support",
         "de": "PDF-Exportfunktion hinzugefügt\nAutomatische Erkennung und Authentifizierung für ioBroker-Webanmeldung hinzugefügt\nUnterstützung für Anmeldeinformationen hinzugefügt",

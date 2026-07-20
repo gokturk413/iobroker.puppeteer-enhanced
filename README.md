@@ -253,6 +253,9 @@ sendTo('puppeteer.0', 'pdf', { url: 'https://www.google.com',
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### 0.5.1 (2026-07-20)
+* Updated repository checker requirements, dependencies, Node.js 22 support, and admin i18n translations
+
 ### 0.5.0 (2026-02-11)
 * Added PDF export functionality via 'pdf' command
 * Added automatic ioBroker web login detection and authentication
