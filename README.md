@@ -425,6 +425,9 @@ setState('puppeteer-enhanced.0.url', 'https://www.google.com', false); // Trigge
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### 0.5.2 (2026-07-20)
+* Updated repository casing to ioBroker.puppeteer-enhanced and added usage examples in README.md
+
 ### 0.5.1 (2026-07-20)
 * Updated repository checker requirements, dependencies, Node.js 22 support, and admin i18n translations
 

@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "puppeteer-enhanced",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "news": {
+      "0.5.2": {
+        "en": "Updated repository casing to ioBroker.puppeteer-enhanced and added usage examples in README.md",
+        "de": "Repository-Schreibweise auf ioBroker.puppeteer-enhanced aktualisiert und Verwendungsbeispiele in README.md hinzugefügt",
+        "ru": "Регистр репозитория обновлен до ioBroker.puppeteer-enhanced и добавлены примеры использования в README.md",
+        "pt": "Caixa do repositório atualizada para ioBroker.puppeteer-enhanced e exemplos de uso adicionados no README.md",
+        "nl": "Repository behuizing bijgewerkt naar ioBroker.puppeteer-enhanced en gebruiksvoorbeelden toegevoegd in README.md",
+        "fr": "Casse du référentiel mise à jour vers ioBroker.puppeteer-enhanced et exemples d'utilisation ajoutés dans README.md",
+        "it": "Maiuscole/minuscole del repository aggiornate a ioBroker.puppeteer-enhanced e aggiunti esempi di utilizzo in README.md",
+        "es": "Mayúsculas y minúsculas del repositorio actualizadas a ioBroker.puppeteer-enhanced y ejemplos de uso añadidos en README.md",
+        "pl": "Zaktualizowano wielkość liter w repozytorium do ioBroker.puppeteer-enhanced i dodano przykłady użycia w README.md",
+        "uk": "Регістр репозиторію оновлено до ioBroker.puppeteer-enhanced та додано приклади використання в README.md",
+        "zh-cn": "存储库大小写更新为 ioBroker.puppeteer-enhanced，并在 README.md 中添加了使用示例"
+      },
       "0.5.1": {
         "en": "Updated repository checker requirements, dependencies, Node.js 22 support, and admin i18n translations",
         "de": "Repository-Checker-Anforderungen, Abhängigkeiten, Node.js 22-Unterstützung und Admin-i18n-Übersetzungen aktualisiert",
