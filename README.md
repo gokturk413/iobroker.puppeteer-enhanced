@@ -248,6 +248,178 @@ sendTo('puppeteer.0', 'pdf', { url: 'https://www.google.com',
 });
 ```
 
+## Usage Examples
+
+Below are practical JavaScript code examples for use in ioBroker scripts (JS/Blockly adapter).
+
+### Screenshot Examples
+
+#### 1. Simple Screenshot
+```javascript
+sendTo('puppeteer-enhanced.0', 'screenshot', 'https://www.google.com', (result) => {
+    if (result.error) {
+        console.log('Error: ' + result.error.message);
+    } else {
+        console.log('Screenshot taken successfully');
+    }
+});
+```
+
+#### 2. Screenshot Saved to File Path
+```javascript
+sendTo('puppeteer-enhanced.0', 'screenshot', {
+    url: 'https://www.google.com',
+    path: '/tmp/screenshot.png',
+    fullPage: true
+}, (result) => {
+    console.log('Screenshot saved to /tmp/screenshot.png');
+});
+```
+
+#### 3. Screenshot Saved to ioBroker Storage
+```javascript
+sendTo('puppeteer-enhanced.0', 'screenshot', {
+    url: 'https://www.google.com',
+    ioBrokerOptions: {
+        storagePath: 'screenshots/google.png'
+    }
+}, (result) => {
+    console.log('Screenshot saved to ioBroker storage under 0_userdata.0');
+});
+```
+
+#### 4. Screenshot of ioBroker VIS with Login Credentials
+```javascript
+sendTo('puppeteer-enhanced.0', 'screenshot', {
+    url: 'http://192.168.1.100:8082/vis/index.html',
+    path: '/tmp/vis-screenshot.png',
+    loginCredentials: {
+        username: 'admin',
+        password: 'mypassword'
+    },
+    fullPage: true
+}, (result) => {
+    console.log('VIS screenshot with login taken');
+});
+```
+
+#### 5. Screenshot with Selector and Viewport Options
+```javascript
+sendTo('puppeteer-enhanced.0', 'screenshot', {
+    url: 'https://www.example.com',
+    path: '/tmp/example.png',
+    waitOption: {
+        waitForSelector: '#main-content'
+    },
+    viewportOptions: {
+        width: 1920,
+        height: 1080
+    }
+});
+```
+
+### PDF Export Examples
+
+#### 6. Simple PDF Export
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'https://www.google.com',
+    path: '/tmp/google.pdf'
+}, (result) => {
+    if (result.error) {
+        console.log('Error: ' + result.error.message);
+    } else {
+        console.log('PDF exported successfully');
+    }
+});
+```
+
+#### 7. PDF Export with A4 Format and Margins
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'https://www.example.com',
+    path: '/tmp/document.pdf',
+    format: 'A4',
+    printBackground: true,
+    margin: {
+        top: '20mm',
+        right: '20mm',
+        bottom: '20mm',
+        left: '20mm'
+    }
+}, (result) => {
+    console.log('A4 PDF with margins created');
+});
+```
+
+#### 8. Landscape PDF Export with Header and Footer
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'https://www.example.com',
+    path: '/tmp/landscape.pdf',
+    format: 'A4',
+    landscape: true,
+    displayHeaderFooter: true,
+    headerTemplate: '<div style="font-size: 10px; text-align: center; width: 100%;">Header</div>',
+    footerTemplate: '<div style="font-size: 10px; text-align: center; width: 100%;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>',
+    printBackground: true
+});
+```
+
+#### 9. PDF Export from ioBroker VIS with Authentication
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'http://192.168.1.100:8082/vis/index.html',
+    path: '/tmp/vis-export.pdf',
+    loginCredentials: {
+        username: 'admin',
+        password: 'mypassword'
+    },
+    format: 'A4',
+    printBackground: true,
+    waitOption: {
+        waitForSelector: '#vis_container'
+    }
+}, (result) => {
+    console.log('VIS exported to PDF with authentication');
+});
+```
+
+#### 10. PDF Export Saved to ioBroker Storage
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'https://www.example.com',
+    ioBrokerOptions: {
+        storagePath: 'documents/report.pdf'
+    },
+    format: 'A4',
+    printBackground: true,
+    margin: {
+        top: '10mm',
+        bottom: '10mm'
+    }
+});
+```
+
+#### 11. PDF Export with Page Ranges
+```javascript
+sendTo('puppeteer-enhanced.0', 'pdf', {
+    url: 'https://www.example.com',
+    path: '/tmp/pages.pdf',
+    pageRanges: '1-3, 5',
+    format: 'A4'
+});
+```
+
+### State-Based Screenshot (Legacy Method)
+
+```javascript
+// Example using state objects
+setState('puppeteer-enhanced.0.filename', '/tmp/state-screenshot.png', false);
+setState('puppeteer-enhanced.0.fullPage', true, false);
+setState('puppeteer-enhanced.0.url', 'https://www.google.com', false); // Triggers the screenshot
+```
+
 ## Changelog
 <!--
     Placeholder for the next version (at the beginning of the line):
