@@ -425,6 +425,9 @@ setState('puppeteer-enhanced.0.url', 'https://www.google.com', false); // Trigge
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### 0.5.6 (2026-07-20)
+* Re-added mocha to devDependencies for test runner binary execution in CI
+
 ### 0.5.5 (2026-07-20)
 * Updated minimum Node.js requirement to 22.12.0 for Puppeteer 25.x compatibility
 * Upgraded @tsconfig/node22 to 22.0.5

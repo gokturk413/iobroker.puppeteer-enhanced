@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "puppeteer-enhanced",
-    "version": "0.5.5",
+    "version": "0.5.6",
     "news": {
+      "0.5.6": {
+        "en": "Re-added mocha to devDependencies for test runner binary execution",
+        "de": "Mocha zu devDependencies für die Test-Runner-Ausführung wieder hinzugefügt",
+        "ru": "Повторно добавлен mocha в devDependencies для выполнения бинарных тестов",
+        "pt": "Re-adicionado mocha a devDependencies para execução do runner de testes",
+        "nl": "Mocha opnieuw toegevoegd aan devDependencies voor uitvoering van test-runner",
+        "fr": "Mocha ré-ajouté à devDependencies pour l'exécution du runner de test",
+        "it": "Re-aggiunto mocha a devDependencies per l'esecuzione del test runner",
+        "es": "Se volvió a agregar mocha a devDependencies para la ejecución del ejecutor de pruebas",
+        "pl": "Ponownie dodano mocha do devDependencies do wykonywania testów",
+        "uk": "Повторно додано mocha до devDependencies для виконання тестового ранера",
+        "zh-cn": "重新添加 mocha 到 devDependencies 以便测试运行程序执行"
+      },
       "0.5.5": {
         "en": "Updated minimum Node.js requirement to 22.12.0 and upgraded tsconfig node22 rules",
         "de": "Mindestanforderung für Node.js auf 22.12.0 aktualisiert und tsconfig node22-Regeln aktualisiert",
