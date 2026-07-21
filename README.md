@@ -40,7 +40,7 @@ If `fullPage` is set to true, no cropping will be performed.
 
 #### waitForSelector
 The screenshot will be taken after the selector is visible on the page e.g. `#time`. If `waitForSelector` is active, 
-other wait oeprations like `renderTime` are ignored.
+other wait operations like `renderTime` are ignored.
 
 #### renderTime
 Interval in ms to wait till the page will be rendered
@@ -248,6 +248,67 @@ sendTo('puppeteer.0', 'pdf', { url: 'https://www.google.com',
 });
 ```
 
+## Web extension (Screenshot via GET request)
+
+This adapter can register itself as an extension of the ioBroker `web` adapter. Once enabled, screenshots can be
+created with a simple HTTP `GET` request - no scripting or message required. This is handy for dashboards, `img`
+tags, external monitoring tools or `curl`.
+
+### Enabling
+
+1. Open the adapter settings and, under **Web extension**, select the `web` instance that should serve the endpoint
+   (or "All web instances"). This is stored in `native.webInstance` (`*` = all web instances).
+2. Save. The `web` adapter loads the extension and the endpoint becomes available under the web server's address.
+
+### Endpoint
+
+```
+GET http://<iobroker-ip>:8082/puppeteer-enhanced/screenshot?url=<url>
+```
+
+The response is the raw image (`image/png` by default), so you can point a browser, an `<img src="...">` tag or a
+VIS/`vis-2` widget directly at the URL.
+
+#### Examples
+
+```
+# Simple screenshot
+http://192.168.1.100:8082/puppeteer-enhanced/screenshot?url=https://www.iobroker.net
+
+# Full page as JPEG
+http://192.168.1.100:8082/puppeteer-enhanced/screenshot?url=https://www.iobroker.net&type=jpeg&fullPage=true
+
+# Fixed viewport, wait for a selector, and force a download
+http://192.168.1.100:8082/puppeteer-enhanced/screenshot?url=http://192.168.1.100:8082/vis-2/&width=1920&height=1080&waitForSelector=%23vis_container&filename=dashboard.png
+
+# ioBroker VIS behind a login
+http://192.168.1.100:8082/puppeteer-enhanced/screenshot?url=http://192.168.1.100:8082/vis/index.html&username=admin&password=secret
+```
+
+#### Query parameters
+
+| Parameter                                   | Description                                                                      |
+|---------------------------------------------|----------------------------------------------------------------------------------|
+| `url`                                       | **Required.** URL to take a screenshot of                                        |
+| `type` / `format`                           | Image type: `png` (default), `jpeg`, `webp`                                      |
+| `fullPage`                                  | `true`/`false` - capture the full page (crop is ignored)                         |
+| `width`, `height`                           | Viewport size in px (both required to take effect)                               |
+| `quality`                                   | Image quality 0-100 (JPEG/WebP only)                                             |
+| `omitBackground`                            | `true`/`false` - transparent background                                          |
+| `clipX`, `clipY`, `clipWidth`, `clipHeight` | Clip region in px (ignored when `fullPage=true`)                                 |
+| `waitForSelector`                           | Wait for this CSS selector before capturing, e.g. `%23time`                      |
+| `renderTime`                                | Milliseconds to wait before capturing (ignored if `waitForSelector` is set)      |
+| `username`, `password`                      | Optional ioBroker web login credentials                                          |
+| `storagePath`                               | Additionally store the image under `0_userdata.0`, e.g. `screenshots/dash.png`   |
+| `filename`                                  | Suggested download filename (sets `Content-Disposition`)                         |
+| `requestTimeout`                            | Milliseconds to wait for the screenshot before returning `504` (default `60000`) |
+
+> The extension runs inside the `web` adapter process and forwards each request to the running
+> `puppeteer-enhanced` instance, so the already launched browser is reused.
+>
+> If the selected `web` instance has authentication enabled, the request must be authenticated accordingly
+> (or use a web instance without authentication for these endpoints).
+
 ## Usage Examples
 
 Below are practical JavaScript code examples for use in ioBroker scripts (JS/Blockly adapter).
@@ -425,6 +486,12 @@ setState('puppeteer-enhanced.0.url', 'https://www.google.com', false); // Trigge
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* Added web extension: screenshots can now be created via a GET request (`/puppeteer-enhanced/screenshot?url=...`) when the adapter is registered as an extension of the `web` adapter
+* Added `webInstance` setting to select which `web` instance serves the screenshot endpoint
+* Added `maxParallelProcesses` setting to limit how many screenshots/PDFs are rendered in parallel; further requests are queued (set to 1 on low-memory devices like a Raspberry Pi to avoid running out of RAM)
+* Fixed screenshot handling for object messages, where the `url` was not read from the message
+
 ### 0.5.2 (2026-07-20)
 * Updated repository casing to ioBroker.puppeteer-enhanced and added usage examples in README.md
 

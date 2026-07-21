@@ -38,6 +38,50 @@
         ]
       }]
     },
+    "_performanceHeader": {
+      "newLine": true,
+      "type": "header",
+      "text": "performanceSettings",
+      "size": 5,
+      "xs": 12
+    },
+    "maxParallelProcesses": {
+      "newLine": true,
+      "type": "number",
+      "min": 1,
+      "max": 20,
+      "step": 1,
+      "label": "maxParallelProcesses",
+      "help": "maxParallelProcessesHelp",
+      "xs": 12,
+      "sm": 6,
+      "md": 4
+    },
+    "_webExtensionHeader": {
+      "newLine": true,
+      "type": "header",
+      "text": "webExtensionSettings",
+      "size": 5,
+      "xs": 12
+    },
+    "_webExtensionHint": {
+      "newLine": true,
+      "type": "staticText",
+      "text": "webExtensionHint",
+      "xs": 12
+    },
+    "webInstance": {
+      "newLine": true,
+      "type": "instance",
+      "adapter": "web",
+      "all": true,
+      "allText": "allWebInstances",
+      "label": "webInstance",
+      "help": "webInstanceHelp",
+      "xs": 12,
+      "sm": 12,
+      "md": 6
+    },
     "_webLoginHeader": {
       "newLine": true,
       "type": "header",

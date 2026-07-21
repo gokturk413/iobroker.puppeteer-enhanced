@@ -43,4 +43,5 @@ temp/
 # ioBroker specific
 *.code-workspace
 .commitinfo
+*.tgz
 
